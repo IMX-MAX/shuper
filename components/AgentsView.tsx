@@ -1,5 +1,6 @@
+
 import React, { useState, useRef } from 'react';
-import { Agent, GEMINI_MODELS, OPENROUTER_FREE_MODELS, DEEPSEEK_MODELS, MOONSHOT_MODELS } from '../types';
+import { Agent, GEMINI_MODELS, OPENROUTER_FREE_MODELS, ROUTEWAY_MODELS, MODEL_FRIENDLY_NAMES } from '../types';
 import { Plus, Bot, ChevronRight, Save, Trash2, Edit2, Copy, ChevronDown, ArrowRight, History, Camera, Image as ImageIcon, X, Sparkles, Network, Hexagon, Moon } from 'lucide-react';
 
 interface AgentsViewProps {
@@ -84,8 +85,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ agents, onCreateAgent, o
   };
 
   const getModelLabel = (m: string) => {
-      if (m.includes('/')) return m.split('/')[1].split(':')[0];
-      return m;
+      return MODEL_FRIENDLY_NAMES[m] || (m.includes('/') ? m.split('/')[1].split(':')[0] : m);
   };
 
   return (
@@ -166,7 +166,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ agents, onCreateAgent, o
                                       <div className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 overflow-y-auto max-h-[300px] custom-scrollbar">
                                           <div className="px-4 py-1.5 text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider sticky top-0 bg-[var(--bg-elevated)]">Gemini</div>
                                           {GEMINI_MODELS.map(m => (
-                                              <div key={m} onClick={() => { setBaseModel(m); setIsModelMenuOpen(false); }} className="px-4 py-2 hover:bg-[var(--bg-secondary)] text-[12px] cursor-pointer">{m}</div>
+                                              <div key={m} onClick={() => { setBaseModel(m); setIsModelMenuOpen(false); }} className="px-4 py-2 hover:bg-[var(--bg-secondary)] text-[12px] cursor-pointer">{getModelLabel(m)}</div>
+                                          ))}
+                                          <div className="px-4 py-1.5 text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider sticky top-0 bg-[var(--bg-elevated)] mt-2">Routeway.ai</div>
+                                          {ROUTEWAY_MODELS.map(m => (
+                                              <div key={m} onClick={() => { setBaseModel(m); setIsModelMenuOpen(false); }} className="px-4 py-2 hover:bg-[var(--bg-secondary)] text-[12px] cursor-pointer">{getModelLabel(m)}</div>
                                           ))}
                                           <div className="px-4 py-1.5 text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider sticky top-0 bg-[var(--bg-elevated)] mt-2">OpenRouter</div>
                                           {OPENROUTER_FREE_MODELS.map(m => (

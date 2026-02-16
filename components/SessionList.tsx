@@ -23,6 +23,7 @@ interface SessionListProps {
   onOpenSidebar?: () => void;
   triggerSearch?: number;
   onEditTitle?: (val: boolean) => void;
+  onMarkUnread?: (id: string) => void;
 }
 
 export const SessionList: React.FC<SessionListProps> = ({ 
@@ -42,7 +43,8 @@ export const SessionList: React.FC<SessionListProps> = ({
     currentFilter,
     onOpenSidebar,
     triggerSearch,
-    onEditTitle
+    onEditTitle,
+    onMarkUnread
 }) => {
   const [statusMenuOpenId, setStatusMenuOpenId] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<React.CSSProperties | undefined>(undefined);
@@ -191,6 +193,8 @@ export const SessionList: React.FC<SessionListProps> = ({
           onToggleFlag(sessionId);
       } else if (action === 'new_session') {
           onNewSession();
+      } else if (action === 'mark_unread') {
+          if (onMarkUnread) onMarkUnread(sessionId);
       }
       setContextMenu(null);
   };

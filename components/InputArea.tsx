@@ -8,7 +8,7 @@ import {
   Loader2,
   RefreshCcw,
   ChevronDown,
-  Trash2,
+  Trash2, 
   Compass, 
   Square, 
   AlertCircle, 
@@ -22,7 +22,7 @@ import {
   Database,
   AppWindow
 } from 'lucide-react';
-import { Attachment, Agent, Label, SessionStatus, SessionMode, GEMINI_MODELS, OPENROUTER_FREE_MODELS, DEEPSEEK_MODELS, MOONSHOT_MODELS } from '../types';
+import { Attachment, Agent, Label, SessionStatus, SessionMode, GEMINI_MODELS, OPENROUTER_FREE_MODELS, ROUTEWAY_MODELS, MODEL_FRIENDLY_NAMES } from '../types';
 import { ModelSelector } from './ModelSelector';
 import { StatusSelector, STATUS_CONFIG } from './StatusSelector';
 
@@ -42,8 +42,7 @@ interface InputAreaProps {
   onSelectModel: (model: string) => void;
   sendKey: 'Enter' | 'Ctrl+Enter';
   hasOpenRouterKey?: boolean;
-  hasDeepSeekKey?: boolean;
-  hasMoonshotKey?: boolean;
+  hasRoutewayKey?: boolean;
   currentMode: SessionMode;
   onUpdateMode: (mode: SessionMode) => void;
   onUpdateCouncilModels?: (models: string[]) => void;
@@ -55,6 +54,7 @@ interface InputAreaProps {
   onDraftChange: (val: string) => void;
   isEditing?: boolean;
   onCancelEdit?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const InputArea: React.FC<InputAreaProps> = ({ 
@@ -72,8 +72,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
     onSelectModel,
     sendKey,
     hasOpenRouterKey,
-    hasDeepSeekKey,
-    hasMoonshotKey,
+    hasRoutewayKey,
     currentMode,
     onUpdateMode,
     onUpdateCouncilModels,
@@ -84,7 +83,8 @@ export const InputArea: React.FC<InputAreaProps> = ({
     draftValue,
     onDraftChange,
     isEditing = false,
-    onCancelEdit
+    onCancelEdit,
+    onOpenSettings
 }) => {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [localText, setLocalText] = useState(draftValue);
@@ -149,11 +149,10 @@ export const InputArea: React.FC<InputAreaProps> = ({
     const agent = agents.find(a => a.id === currentModel);
     const targetModelId = agent ? agent.baseModel : currentModel;
     if (GEMINI_MODELS.includes(targetModelId)) return !!process.env.API_KEY;
-    if (OPENROUTER_FREE_MODELS.includes(targetModelId) || targetModelId.includes(':free')) return !!hasOpenRouterKey;
-    if (DEEPSEEK_MODELS.includes(targetModelId)) return !!hasDeepSeekKey;
-    if (MOONSHOT_MODELS.includes(targetModelId)) return !!hasMoonshotKey;
+    if (OPENROUTER_FREE_MODELS.includes(targetModelId) || targetModelId.includes(':free') && !ROUTEWAY_MODELS.includes(targetModelId)) return !!hasOpenRouterKey;
+    if (ROUTEWAY_MODELS.includes(targetModelId)) return !!hasRoutewayKey;
     return false;
-  }, [currentModel, currentMode, agents, hasOpenRouterKey, hasDeepSeekKey, hasMoonshotKey]);
+  }, [currentModel, currentMode, agents, hasOpenRouterKey, hasRoutewayKey]);
 
   const updateHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -215,11 +214,27 @@ export const InputArea: React.FC<InputAreaProps> = ({
       }
   };
 
+  // Only consider models that are currently visible/enabled
+  const validCouncilModels = useMemo(() => {
+    return councilModels.filter(m => visibleModels.includes(m));
+  }, [councilModels, visibleModels]);
+
   const toggleCouncilModel = (m: string) => {
     if (!onUpdateCouncilModels) return;
-    const newModels = councilModels.includes(m) 
-        ? councilModels.filter(x => x !== m) 
-        : (councilModels.length < 3 ? [...councilModels, m] : [councilModels[1], councilModels[2], m]);
+    
+    // Work with valid models only to ensure we don't count hidden/disabled ones towards the limit
+    let newModels: string[] = [];
+    
+    if (validCouncilModels.includes(m)) {
+        newModels = validCouncilModels.filter(x => x !== m);
+    } else {
+        if (validCouncilModels.length < 3) {
+            newModels = [...validCouncilModels, m];
+        } else {
+            // Shift out the first one, keep the rest, add new one
+            newModels = [validCouncilModels[1], validCouncilModels[2], m];
+        }
+    }
     onUpdateCouncilModels(newModels);
   };
 
@@ -244,12 +259,11 @@ export const InputArea: React.FC<InputAreaProps> = ({
 
   const activeAgent = agents.find(a => a.id === currentModel);
   const getModelNameDisplay = () => {
-    if (currentMode === 'council') return `Council (${councilModels.length}/3)`;
-    if (!currentModel) return "Select Model"; // Updated fallback
+    if (currentMode === 'council') return `Council (${validCouncilModels.length}/3)`;
+    if (!currentModel) return "Select Model"; 
     if (!isCurrentModelValid) return "Key Required";
     if (activeAgent) return activeAgent.name;
-    const parts = currentModel.split('/');
-    return parts[parts.length - 1].split(':')[0];
+    return MODEL_FRIENDLY_NAMES[currentModel] || currentModel.split('/').pop()?.split(':')[0] || currentModel;
   };
 
   const getStatusBtnCoords = () => {
@@ -364,8 +378,6 @@ export const InputArea: React.FC<InputAreaProps> = ({
                   accept="application/pdf,image/jpeg,image/png,image/webp,text/plain"
               />
               <button onClick={() => fileInputRef.current?.click()} className="text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"><Paperclip className="w-5 h-5" /></button>
-              <button className="text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"><Database className="w-5 h-5" /></button>
-              <button className="text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"><AppWindow className="w-5 h-5" /></button>
           </div>
           
           <div className="flex items-center gap-4">
@@ -386,10 +398,11 @@ export const InputArea: React.FC<InputAreaProps> = ({
                               <div className="absolute bottom-full right-0 mb-3 w-64 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-2xl shadow-2xl p-4 z-[110] animate-in fade-in zoom-in-95 origin-bottom-right">
                                   <h4 className="text-[10px] font-black uppercase text-[var(--text-dim)] mb-3 tracking-widest px-1">Select 3 Models</h4>
                                   <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                      {[...GEMINI_MODELS, ...OPENROUTER_FREE_MODELS].map(mId => (
+                                      {visibleModels.length === 0 && <div className="text-[11px] text-[var(--text-dim)] text-center py-2">No models enabled in settings.</div>}
+                                      {visibleModels.map(mId => (
                                           <div key={mId} onClick={() => toggleCouncilModel(mId)} className="flex items-center justify-between px-3 py-2 hover:bg-[var(--bg-secondary)] rounded-xl cursor-pointer group transition-colors">
-                                              <span className={`text-[12px] font-bold truncate max-w-[160px] ${councilModels.includes(mId) ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>{mId.split('/').pop()?.split(':')[0]}</span>
-                                              {councilModels.includes(mId) && <Check className="w-3.5 h-3.5 text-[var(--accent)]" />}
+                                              <span className={`text-[12px] font-bold truncate max-w-[160px] ${validCouncilModels.includes(mId) ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>{MODEL_FRIENDLY_NAMES[mId] || mId.split('/').pop()?.split(':')[0]}</span>
+                                              {validCouncilModels.includes(mId) && <Check className="w-3.5 h-3.5 text-[var(--accent)]" />}
                                           </div>
                                       ))}
                                   </div>
@@ -401,7 +414,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
                           </>
                       )
                   ) : (
-                      <ModelSelector isOpen={isModelMenuOpen} onClose={() => setIsModelMenuOpen(false)} currentModel={currentModel} onSelect={onSelectModel} visibleModels={visibleModels} agents={agents} hasOpenRouterKey={hasOpenRouterKey} hasDeepSeekKey={hasDeepSeekKey} hasMoonshotKey={hasMoonshotKey} />
+                      <ModelSelector isOpen={isModelMenuOpen} onClose={() => setIsModelMenuOpen(false)} currentModel={currentModel} onSelect={onSelectModel} visibleModels={visibleModels} agents={agents} hasOpenRouterKey={hasOpenRouterKey} hasRoutewayKey={hasRoutewayKey} onOpenSettings={onOpenSettings} />
                   )}
               </div>
               

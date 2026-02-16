@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Sparkles, Send, PanelRightClose, Bot, FileText, ChevronUp, Eye, Edit3, Type, List, CheckSquare, Wand2, SpellCheck } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -165,8 +166,8 @@ export const DocsPanel: React.FC<DocsPanelProps> = ({
                     contentEditable
                     onInput={handleInput}
                     onKeyDown={handleKeyDown}
-                    className="w-full bg-transparent text-[var(--text-main)] focus:outline-none leading-relaxed text-lg font-inter min-h-[60vh] empty:before:content-[attr(placeholder)] empty:before:text-[var(--text-dim)] outline-none"
-                    placeholder="Start writing... Markdown is supported."
+                    className="w-full bg-transparent text-[var(--text-main)] focus:outline-none leading-relaxed text-lg font-inter min-h-[60vh] empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--text-dim)] outline-none"
+                    data-placeholder="Start writing... Markdown is supported."
                     style={{ whiteSpace: 'pre-wrap' }}
                   />
                 </div>

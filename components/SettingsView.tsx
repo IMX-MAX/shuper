@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UserSettings, Label, GEMINI_MODELS, OPENROUTER_FREE_MODELS, DEEPSEEK_MODELS, MOONSHOT_MODELS, ColorTheme, FontFamily } from '../types';
+import { UserSettings, Label, GEMINI_MODELS, OPENROUTER_FREE_MODELS, ROUTEWAY_MODELS, ColorTheme, FontFamily, Session, Message, Agent } from '../types';
 import { 
   Monitor, 
   Palette, 
@@ -31,7 +31,9 @@ import {
   RefreshCcw,
   User,
   Layout,
-  Sparkles
+  Sparkles,
+  Download,
+  Upload
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -41,6 +43,11 @@ interface SettingsViewProps {
   onUpdateLabels: (labels: Label[]) => void;
   onClearData: () => void;
   onRepairWorkspace: () => void;
+  sessions: Session[];
+  messages: Record<string, Message[]>;
+  agents: Agent[];
+  sessionModels: Record<string, string>;
+  onImportWorkspace: (data: any) => void;
 }
 
 const ApiKeyInput = ({ 
@@ -85,8 +92,20 @@ const ApiKeyInput = ({
     );
 };
 
-const ModelList = ({ title, models, visibleModels, onToggle }: { title: string, models: string[], visibleModels: string[], onToggle: (model: string) => void }) => {
+const ModelList = ({ title, models, visibleModels, onToggle, disabled }: { title: string, models: string[], visibleModels: string[], onToggle: (model: string) => void, disabled?: boolean }) => {
     const [isExpanded, setIsExpanded] = useState(true);
+    
+    if (disabled) {
+        return (
+             <div className="border border-[var(--border)] rounded-2xl overflow-hidden bg-[var(--bg-tertiary)]/30 opacity-60 relative">
+                <div className="px-4 py-3 flex items-center justify-between cursor-not-allowed">
+                    <h4 className="font-bold text-[11px] uppercase tracking-widest text-[var(--text-muted)]">{title}</h4>
+                    <span className="text-[9px] font-black text-red-400 uppercase tracking-wide bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">Key Required</span>
+                </div>
+             </div>
+        );
+    }
+
     return (
         <div className="border border-[var(--border)] rounded-2xl overflow-hidden bg-[var(--bg-tertiary)]/50">
             <div 
@@ -155,13 +174,26 @@ const ThemePicker = ({ current, onSelect, onClose }: { current: ColorTheme, onSe
     );
 };
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings, labels, onUpdateLabels, onClearData, onRepairWorkspace }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ 
+    settings, 
+    onUpdateSettings, 
+    labels, 
+    onUpdateLabels, 
+    onClearData, 
+    onRepairWorkspace,
+    sessions,
+    messages,
+    agents,
+    sessionModels,
+    onImportWorkspace
+}) => {
   const [activeTab, setActiveTab] = useState('ai');
   const [isMobileMenuVisible, setIsMobileMenuVisible] = useState(true);
   const [newLabelName, setNewLabelName] = useState('');
   const [isAddingLabel, setIsAddingLabel] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
   const predefinedColors = ['#A1A1A1', '#737373', '#525252', '#F5F5F5', '#E5E5E5', '#D1D1D1'];
 
@@ -212,6 +244,48 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSe
     }
   };
 
+  const handleExport = () => {
+      const backup = {
+          version: '1.0',
+          timestamp: new Date().toISOString(),
+          settings,
+          sessions,
+          messages,
+          agents,
+          labels,
+          sessionModels
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shuper-backup-${new Date().toISOString().split('T')[0]}.shuper`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+          try {
+              const content = ev.target?.result as string;
+              const data = JSON.parse(content);
+              // Basic validation
+              if (!data.settings || !data.sessions) throw new Error("Invalid format");
+              onImportWorkspace(data);
+          } catch (err) {
+              alert("Invalid .shuper file format");
+          }
+          if (backupInputRef.current) backupInputRef.current.value = '';
+      };
+      reader.readAsText(file);
+  };
+
   const ShortcutItem = ({ keys, label }: { keys: string[], label: string }) => (
     <div className="flex items-center justify-between p-4 bg-[var(--bg-tertiary)]/50 border border-[var(--border)] rounded-2xl group transition-all hover:border-[var(--text-dim)]">
         <span className="text-[13px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors">{label}</span>
@@ -226,7 +300,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSe
     </div>
   );
 
-  const allModels = [...GEMINI_MODELS, ...OPENROUTER_FREE_MODELS, ...DEEPSEEK_MODELS, ...MOONSHOT_MODELS];
+  const allModels = [...GEMINI_MODELS, ...OPENROUTER_FREE_MODELS, ...ROUTEWAY_MODELS];
 
   return (
     <div className="flex-1 flex h-full bg-[var(--bg-primary)] text-[var(--text-main)] font-inter relative">
@@ -325,13 +399,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSe
                       </div>
 
                       <div className="island-card border border-[var(--border)] rounded-3xl p-6 md:p-8 space-y-6 shadow-sm bg-[var(--bg-secondary)]">
-                          <h3 className="font-bold text-lg text-[var(--text-main)]">Workspace Actions</h3>
+                          <h3 className="font-bold text-lg text-[var(--text-main)]">Backup & Restore</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <button 
+                                onClick={handleExport}
+                                className="flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-[var(--bg-tertiary)] border border-[var(--border)] hover:bg-[var(--bg-elevated)] transition-all group text-[var(--text-main)]"
+                              >
+                                  <Download className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                                  <span className="text-sm font-bold">Download .shuper</span>
+                              </button>
+                              <div className="relative">
+                                  <input 
+                                      type="file" 
+                                      ref={backupInputRef}
+                                      onChange={handleFileImport}
+                                      accept=".shuper,.json"
+                                      className="hidden"
+                                  />
+                                  <button 
+                                    onClick={() => backupInputRef.current?.click()}
+                                    className="flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-[var(--bg-tertiary)] border border-[var(--border)] hover:bg-[var(--bg-elevated)] transition-all group w-full text-[var(--text-main)]"
+                                  >
+                                      <Upload className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                                      <span className="text-sm font-bold">Upload Workspace</span>
+                                  </button>
+                              </div>
+                          </div>
+                          <p className="text-[11px] text-[var(--text-dim)] font-medium text-center px-4">
+                            Your backup includes all chats, messages, agents, and API keys. Keep it safe.
+                          </p>
+                      </div>
+
+                      <div className="island-card border border-[var(--border)] rounded-3xl p-6 md:p-8 space-y-6 shadow-sm bg-[var(--bg-secondary)]">
+                          <h3 className="font-bold text-lg text-[var(--text-main)]">Danger Zone</h3>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <button 
                                 onClick={onRepairWorkspace}
                                 className="flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-[var(--bg-tertiary)] border border-[var(--border)] hover:bg-[var(--bg-elevated)] transition-all group"
                               >
-                                  <RefreshCcw className="w-4 h-4 text-emerald-500 group-hover:rotate-180 transition-transform duration-500" />
+                                  <RefreshCcw className="w-4 h-4 text-orange-400 group-hover:rotate-180 transition-transform duration-500" />
                                   <span className="text-sm font-bold">Repair Workspace</span>
                               </button>
                               <button 
@@ -343,7 +449,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSe
                               </button>
                           </div>
                           <p className="text-[11px] text-[var(--text-dim)] font-medium text-center px-4">
-                            Repairing rebuilds indexing and fixes corrupt chats. Resetting removes everything permanently.
+                            Repairing rebuilds indexing. Resetting removes everything permanently.
                           </p>
                       </div>
                   </div>
@@ -355,10 +461,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSe
                           <h3 className="font-bold text-lg tracking-tight text-[var(--text-main)]">API Keys</h3>
                           <div className="space-y-6">
                               <ApiKeyInput label="Google Gemini" value={settings.apiKeys.gemini} onChange={(v) => updateApiKey('gemini', v)} placeholder="AIzaSy..." />
+                              <ApiKeyInput label="Routeway.ai" value={settings.apiKeys.routeway} onChange={(v) => updateApiKey('routeway', v)} placeholder="sk-rw-..." />
                               <ApiKeyInput label="OpenRouter" value={settings.apiKeys.openRouter} onChange={(v) => updateApiKey('openRouter', v)} placeholder="sk-or-v1-..." />
                               <ApiKeyInput label="OpenRouter (Secondary)" value={settings.apiKeys.openRouterAlt} onChange={(v) => updateApiKey('openRouterAlt', v)} placeholder="sk-or-v1-..." description="Backup key when quota exceeded" />
-                              <ApiKeyInput label="DeepSeek" value={settings.apiKeys.deepSeek} onChange={(v) => updateApiKey('deepSeek', v)} placeholder="sk-..." />
-                              <ApiKeyInput label="Moonshot AI" value={settings.apiKeys.moonshot} onChange={(v) => updateApiKey('moonshot', v)} placeholder="sk-..." />
                           </div>
                       </div>
 
@@ -384,8 +489,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSe
                       <div className="space-y-4">
                           <h3 className="font-bold text-lg text-[var(--text-main)] px-2">Enabled Models</h3>
                           <div className="grid grid-cols-1 gap-3">
-                            <ModelList title="Google Gemini" models={GEMINI_MODELS} visibleModels={settings.visibleModels} onToggle={toggleModel} />
-                            <ModelList title="OpenRouter (Free)" models={OPENROUTER_FREE_MODELS} visibleModels={settings.visibleModels} onToggle={toggleModel} />
+                            <ModelList 
+                                title="Google Gemini" 
+                                models={GEMINI_MODELS} 
+                                visibleModels={settings.visibleModels} 
+                                onToggle={toggleModel} 
+                                disabled={!settings.apiKeys.gemini && !process.env.API_KEY}
+                            />
+                            <ModelList 
+                                title="Routeway.ai" 
+                                models={ROUTEWAY_MODELS} 
+                                visibleModels={settings.visibleModels} 
+                                onToggle={toggleModel} 
+                                disabled={!settings.apiKeys.routeway}
+                            />
+                            <ModelList 
+                                title="OpenRouter (Free)" 
+                                models={OPENROUTER_FREE_MODELS} 
+                                visibleModels={settings.visibleModels} 
+                                onToggle={toggleModel} 
+                                disabled={!settings.apiKeys.openRouter && !settings.apiKeys.openRouterAlt}
+                            />
                           </div>
                       </div>
                   </div>

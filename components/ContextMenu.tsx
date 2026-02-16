@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { 
@@ -180,7 +181,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
            <Archive className="w-4 h-4" />
            <span>{currentStatus === 'archive' ? 'Unarchive' : 'Archive'}</span>
         </div>
-        <div className="flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg-elevated)] hover:text-[var(--text-main)] rounded-lg cursor-pointer transition-colors">
+        <div 
+            onClick={(e) => {
+                e.stopPropagation();
+                onAction('mark_unread');
+                onClose();
+            }}
+            className="flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg-elevated)] hover:text-[var(--text-main)] rounded-lg cursor-pointer transition-colors"
+        >
            <Mail className="w-4 h-4" />
            <span>Mark as Unread</span>
         </div>

@@ -39,7 +39,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import vscDarkPlus from 'react-syntax-highlighter/dist/esm/styles/prism/vsc-dark-plus';
-import { Message, Session, Label, Attachment, Agent, OPENROUTER_FREE_MODELS, DEEPSEEK_MODELS, MOONSHOT_MODELS, GEMINI_MODELS, SessionMode, UserSettings } from '../types';
+import { Message, Session, Label, Attachment, Agent, OPENROUTER_FREE_MODELS, GEMINI_MODELS, SessionMode, UserSettings } from '../types';
 import { InputArea } from './InputArea';
 import { SessionStatus } from '../types';
 import { ContextMenu } from './ContextMenu';
@@ -70,8 +70,7 @@ interface ChatInterfaceProps {
   onToggleFlag: () => void;
   onNewSession: () => void;
   hasOpenRouterKey?: boolean;
-  hasDeepSeekKey?: boolean;
-  hasMoonshotKey?: boolean;
+  hasRoutewayKey?: boolean;
   onBackToList?: () => void;
   onOpenSidebar?: () => void;
   hasAnyKey?: boolean;
@@ -301,7 +300,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     session, messages, onSendMessage, onStopGeneration, isLoading, onUpdateStatus,
     availableLabels, onUpdateLabels, onCreateLabel, onDeleteSession, onRenameSession,
     onUpdateMode, onUpdateCouncilModels, onChangeView, onNewSession, visibleModels, agents, currentModel, onSelectModel,
-    sendKey, onRegenerateTitle, onToggleFlag, hasOpenRouterKey, hasDeepSeekKey, hasMoonshotKey,
+    sendKey, onRegenerateTitle, onToggleFlag, hasOpenRouterKey, hasRoutewayKey,
     onBackToList, onOpenSidebar, hasAnyKey, userSettings, draftValue, onDraftChange,
     isEditingTitle = false, setIsEditingTitle = (_val: boolean) => {}
 }) => {
@@ -402,36 +401,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         </div>
 
-        {visibleModels.length === 0 ? (
-             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in-95 duration-500 z-10">
-                <div className="w-20 h-20 bg-[var(--bg-elevated)] rounded-[2rem] flex items-center justify-center mb-6 shadow-xl border border-[var(--border)] relative overflow-hidden group cursor-pointer" onClick={() => onChangeView('settings')}>
-                    <div className="absolute inset-0 bg-gradient-to-tr from-[var(--accent)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                    <Settings className="w-10 h-10 text-[var(--text-main)] transition-transform duration-500 group-hover:rotate-45" strokeWidth={1.5} />
-                </div>
-                <h2 className="text-2xl font-bold text-[var(--text-main)] mb-3 tracking-tight">Configuration Needed</h2>
-                <p className="text-[var(--text-dim)] max-w-sm text-sm leading-relaxed mb-8 font-medium">
-                    To start using Shuper, please add your API keys and enable at least one model in the settings.
-                </p>
-                <button 
-                    onClick={() => onChangeView('settings')}
-                    className="px-8 py-3.5 bg-[var(--text-main)] text-[var(--bg-primary)] rounded-2xl font-bold text-sm hover:scale-105 transition-all shadow-lg shadow-[var(--text-main)]/10 active:scale-95 flex items-center gap-2.5 group"
-                >
-                    <span>Open Settings</span>
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </button>
-            </div>
-        ) : (
-            <MessageHistoryMemo 
-                messages={messages}
-                isLoading={isLoading}
-                sessionMode={session.mode || 'explore'}
-                onCopyText={handleCopyText}
-                onMessageContextMenu={handleMessageContextMenu}
-                copiedId={copiedId}
-                scrollRef={scrollRef}
-                hasAnyKey={!!hasAnyKey}
-            />
-        )}
+        <MessageHistoryMemo 
+            messages={messages}
+            isLoading={isLoading}
+            sessionMode={session.mode || 'explore'}
+            onCopyText={handleCopyText}
+            onMessageContextMenu={handleMessageContextMenu}
+            copiedId={copiedId}
+            scrollRef={scrollRef}
+            hasAnyKey={!!hasAnyKey}
+        />
 
         {messageContextMenu && (
             <>
@@ -466,8 +445,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   onSelectModel={onSelectModel}
                   sendKey={sendKey}
                   hasOpenRouterKey={hasOpenRouterKey}
-                  hasDeepSeekKey={hasDeepSeekKey}
-                  hasMoonshotKey={hasMoonshotKey}
+                  hasRoutewayKey={hasRoutewayKey}
                   hasAnyKey={hasAnyKey}
                   currentMode={session.mode || 'explore'}
                   onUpdateMode={onUpdateMode}
@@ -482,6 +460,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       setEditingMessageId(null);
                       setEditContent('');
                   }}
+                  onOpenSettings={() => onChangeView('settings')}
              />
         </div>
 
