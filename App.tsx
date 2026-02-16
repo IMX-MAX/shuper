@@ -36,8 +36,8 @@ const DEFAULT_SETTINGS: UserSettings = {
     fontFamily: 'Inter',
     accentColor: '#F5F5F5',
     workspaceName: 'shuper - your favorite AI executor',
-    visibleModels: [...GEMINI_MODELS],
-    defaultModel: GEMINI_MODELS[0],
+    visibleModels: [],
+    defaultModel: '',
     userName: 'User',
     timezone: 'UTC',
     language: 'English',
@@ -152,7 +152,7 @@ const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) 
             </div>
 
             {/* Content Container */}
-            <div className={`relative z-10 w-full max-w-4xl flex flex-col items-center text-center ${!isExiting ? 'animate-hero-in' : ''}`}>
+            <div className={`relative z-10 w-full max-w-4xl flex flex-col items-center text-center ${!isExiting ? 'animate-fly-in-up' : ''}`}>
                 
                 {/* Main Heading */}
                 <h1 className="text-[4rem] md:text-[7rem] leading-[0.9] font-black tracking-tighter mb-6 text-black">
@@ -171,7 +171,7 @@ const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) 
                             value={name}
                             onChange={e => setName(e.target.value)}
                             placeholder="What's your name?"
-                            className="w-full bg-transparent border-b-2 border-gray-200 py-3 text-lg font-medium text-black placeholder-gray-400 focus:outline-none focus:border-black transition-all text-center"
+                            className="w-full bg-transparent border-b border-gray-200 py-3 text-lg font-medium text-black placeholder-gray-400 focus:outline-none focus:border-black transition-all text-center"
                             autoFocus
                             onKeyDown={(e) => e.key === 'Enter' && document.getElementById('workspace-input')?.focus()}
                         />
@@ -182,7 +182,7 @@ const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) 
                             value={workspace}
                             onChange={e => setWorkspace(e.target.value)}
                             placeholder="Name your workspace"
-                            className="w-full bg-transparent border-b-2 border-gray-200 py-3 text-lg font-medium text-black placeholder-gray-400 focus:outline-none focus:border-black transition-all text-center"
+                            className="w-full bg-transparent border-b border-gray-200 py-3 text-lg font-medium text-black placeholder-gray-400 focus:outline-none focus:border-black transition-all text-center"
                             onKeyDown={(e) => e.key === 'Enter' && handleComplete()}
                         />
                     </div>
@@ -194,7 +194,7 @@ const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) 
                     disabled={!name || !workspace}
                     className="group relative inline-flex items-center justify-center gap-2 px-10 py-4 bg-black text-white rounded-full text-sm font-bold tracking-wide hover:bg-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95 shadow-xl"
                 >
-                    Try it today
+                    Get Started
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
 
@@ -205,7 +205,7 @@ const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) 
             </div>
             
             {/* Decorative Card mimic */}
-            <div className={`absolute bottom-10 left-10 hidden lg:block bg-white border border-gray-100 p-4 rounded-xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] max-w-xs rotate-2 ${!isExiting ? 'animate-hero-in' : ''} ${isExiting ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}>
+            <div className={`absolute bottom-10 left-10 hidden lg:block bg-white border border-gray-100 p-4 rounded-xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] max-w-xs rotate-2 ${!isExiting ? 'animate-fly-in-up' : ''} ${isExiting ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}>
                 <div className="text-xs text-gray-500 mb-2 font-medium">Hello, {name || 'Stranger'}. What would you like to build today?</div>
                 <div className="flex items-center gap-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
                     <div className="w-3 h-3 rounded-full bg-black/10"></div>
@@ -513,10 +513,12 @@ const App: React.FC = () => {
       // Clear new response badge when selecting a session
       setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, hasNewResponse: false } : s) : prev);
 
-      if (!sessionModels[id] && hasAnyKey) {
-        const defaultModel = settings.defaultModel || settings.visibleModels[0] || GEMINI_MODELS[0];
-        setSessionModels(prev => ({ ...prev, [id]: defaultModel }));
-      }
+      // We do NOT set a default model here if one doesn't exist, to support "no model selected" state.
+      // The previous logic was:
+      // if (!sessionModels[id] && hasAnyKey) {
+      //   const defaultModel = settings.defaultModel || settings.visibleModels[0] || GEMINI_MODELS[0];
+      //   setSessionModels(prev => ({ ...prev, [id]: defaultModel }));
+      // }
   };
 
   const handleNewSession = () => {
@@ -524,8 +526,9 @@ const App: React.FC = () => {
       setSessions(prev => [newSession, ...(Array.isArray(prev) ? prev : [])]);
       setSessionMessages(prev => ({ ...prev, [newSession.id]: [] }));
       
-      if (hasAnyKey) {
-          const defaultModel = settings.defaultModel || settings.visibleModels[0] || GEMINI_MODELS[0];
+      // Only set a default model if configured in settings
+      if (hasAnyKey && (settings.defaultModel || settings.visibleModels.length > 0)) {
+          const defaultModel = settings.defaultModel || settings.visibleModels[0];
           setSessionModels(prev => ({ ...prev, [newSession.id]: defaultModel }));
       }
 
@@ -797,7 +800,8 @@ const App: React.FC = () => {
   }) : prev);
   const toggleSessionFlag = (id: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, isFlagged: !s.isFlagged } : s) : prev);
   const updateCouncilModels = (id: string, models: string[]) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, councilModels: models } : s) : prev);
-  
+  const handleMarkUnread = (id: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, hasNewResponse: true } : s) : prev);
+
   const deleteSession = (id: string) => {
       const messages = sessionMessages[id] || [];
       if (messages.length === 0) {
@@ -807,8 +811,9 @@ const App: React.FC = () => {
               setSessions([newSession]);
               setSessionMessages({ [newSession.id]: [] });
               setActiveSessionId(newSession.id);
-              if (hasAnyKey) {
-                  const defaultModel = settings.defaultModel || settings.visibleModels[0] || GEMINI_MODELS[0];
+              // Only default model if present
+              if (hasAnyKey && (settings.defaultModel || settings.visibleModels.length > 0)) {
+                  const defaultModel = settings.defaultModel || settings.visibleModels[0];
                   setSessionModels({ [newSession.id]: defaultModel });
               }
               return;
@@ -841,8 +846,8 @@ const App: React.FC = () => {
                   return newState;
               });
               setActiveSessionId(newSession.id);
-              if (hasAnyKey) {
-                  const defaultModel = settings.defaultModel || settings.visibleModels[0] || GEMINI_MODELS[0];
+              if (hasAnyKey && (settings.defaultModel || settings.visibleModels.length > 0)) {
+                  const defaultModel = settings.defaultModel || settings.visibleModels[0];
                   setSessionModels(prev => {
                       const newState = { ...prev };
                       delete newState[id];
@@ -982,6 +987,7 @@ const App: React.FC = () => {
                             onOpenSidebar={() => setIsMobileSidebarOpen(true)}
                             triggerSearch={triggerSearch}
                             onEditTitle={(val) => setIsEditingTitle(val)}
+                            onMarkUnread={handleMarkUnread}
                         />
                     </div>
                     
