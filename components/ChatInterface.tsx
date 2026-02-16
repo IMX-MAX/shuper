@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState, memo, useMemo } from 'react';
 import { 
   ChevronDown, 
@@ -267,7 +268,7 @@ const MessageHistoryMemo = memo(({
     hasAnyKey: boolean
 }) => {
     return (
-        <div className="flex-1 overflow-y-auto px-4 pt-20 pb-40 custom-scrollbar" ref={scrollRef}>
+        <div className="flex-1 overflow-y-auto px-4 pt-20 pb-52 custom-scrollbar" ref={scrollRef}>
           {hasAnyKey && (
               <div className="max-w-3xl mx-auto space-y-10">
                   {messages.map((msg, index) => (
@@ -305,8 +306,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     isEditingTitle = false, setIsEditingTitle = (_val: boolean) => {}
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const statusButtonRef = useRef<HTMLButtonElement>(null);
-  const labelButtonRef = useRef<HTMLButtonElement>(null);
 
   const [titleMenuPosition, setTitleMenuPosition] = useState<{x: number, y: number} | null>(null);
   const [chatContextMenu, setChatContextMenu] = useState<{x: number, y: number} | null>(null);
@@ -315,12 +314,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [editedTitle, setEditedTitle] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState<string>('');
-  
-  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
-  const [isLabelMenuOpen, setIsLabelMenuOpen] = useState(false);
-  
-  const [statusMenuPos, setStatusMenuPos] = useState<React.CSSProperties | undefined>(undefined);
-  const [labelMenuPos, setLabelMenuPos] = useState<{ top: number, left: number } | undefined>(undefined);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -375,27 +368,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           setTimeout(() => setCopiedId(null), 2000);
       });
   };
-  
-  const openStatusMenu = () => {
-      if (statusButtonRef.current) {
-          const rect = statusButtonRef.current.getBoundingClientRect();
-          setStatusMenuPos({ top: rect.bottom + 4, left: rect.left });
-          setIsStatusMenuOpen(true);
-      }
-  };
-
-  const openLabelMenu = () => {
-      if (labelButtonRef.current) {
-          const rect = labelButtonRef.current.getBoundingClientRect();
-          setLabelMenuPos({ top: rect.bottom + 4, left: rect.left });
-          setIsLabelMenuOpen(true);
-      }
-  };
-
-  const StatusIcon = STATUS_CONFIG[session.status].icon;
-  const headerLabelText = session.labelIds.length > 0 
-    ? session.labelIds.map(id => availableLabels.find(l => l.id === id)?.name).filter(Boolean).join(', ')
-    : 'No tags';
 
   const activeAgent = agents.find(a => a.id === currentModel);
 
@@ -403,7 +375,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     <div className="flex-1 flex h-full bg-[var(--bg-tertiary)] relative font-inter overflow-hidden focus:outline-none" onContextMenu={(e) => e.preventDefault()} tabIndex={-1}>
       <div className="flex-1 flex flex-col h-full relative">
         <div className="h-14 flex items-center justify-between px-6 z-30 absolute top-0 left-0 right-0 bg-[var(--bg-tertiary)]/80 backdrop-blur-md">
-          <div className="flex items-center gap-2 max-w-[50%]">
+          <div className="flex items-center gap-2 max-w-[80%]">
               {onBackToList && (
                   <button onClick={onBackToList} className="md:hidden p-1 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-main)]"><ChevronLeft className="w-5 h-5" /></button>
               )}
@@ -412,7 +384,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               ) : (
                   <div onClick={handleTitleClick} onContextMenu={(e) => { e.preventDefault(); setChatContextMenu({ x: e.clientX, y: e.clientY }); }} onDoubleClick={handleDoubleclickTitle} className="flex items-center gap-2 text-[var(--text-main)] font-semibold text-sm cursor-pointer hover:bg-[var(--bg-elevated)] px-2.5 py-1.5 rounded-lg transition-all max-w-full select-none active:scale-[0.98]">
                     {activeAgent && (activeAgent.icon ? <img src={activeAgent.icon} className="w-5 h-5 rounded-full object-cover border border-[var(--border)]" alt="" /> : <Bot className="w-5 h-5 text-[var(--text-muted)]" />)}
-                    <span className="truncate lowercase max-w-[140px] md:max-w-[240px]">{session.title}</span>
+                    <span className="truncate lowercase max-w-[140px] md:max-w-[400px]">{session.title}</span>
                     <ChevronDown className="w-3.5 h-3.5 text-[var(--text-dim)]" />
                   </div>
               )}
@@ -428,32 +400,38 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   </>
               )}
           </div>
-          <div className="flex items-center gap-1.5 md:gap-2">
-               <button ref={statusButtonRef} onClick={openStatusMenu} className="flex items-center gap-2 px-3 py-1 rounded-full border border-[var(--border)] bg-[#E5E5E5]/5 hover:bg-[#E5E5E5]/10 transition-all text-[11px] font-medium text-[var(--text-muted)] group">
-                   <StatusIcon className={`w-3.5 h-3.5 ${STATUS_CONFIG[session.status].color} group-hover:text-white`} />
-                   <span className="hidden sm:inline lowercase">{STATUS_CONFIG[session.status].label}</span>
-                   <ChevronDown className="w-2.5 h-2.5 opacity-50" />
-               </button>
-               <StatusSelector isOpen={isStatusMenuOpen} onClose={() => setIsStatusMenuOpen(false)} currentStatus={session.status} onSelect={onUpdateStatus} position={statusMenuPos} />
-               <button ref={labelButtonRef} onClick={openLabelMenu} className="flex items-center gap-2 px-3 py-1 rounded-full border border-[var(--border)] bg-[#E5E5E5]/5 hover:bg-[#E5E5E5]/10 transition-all text-[11px] font-medium text-[var(--text-muted)] group max-w-[120px]">
-                   <Tag className="w-3 h-3 text-[var(--text-dim)] group-hover:text-white flex-shrink-0" />
-                   <span className="hidden sm:inline truncate lowercase">{headerLabelText}</span>
-                   <ChevronDown className="w-2.5 h-2.5 opacity-50 flex-shrink-0" />
-               </button>
-               <LabelSelector isOpen={isLabelMenuOpen} onClose={() => setIsLabelMenuOpen(false)} availableLabels={availableLabels} selectedLabelIds={session.labelIds} onToggleLabel={onUpdateLabels} onSuggestWithAI={async () => {}} position={labelMenuPos} />
-          </div>
         </div>
 
-        <MessageHistoryMemo 
-            messages={messages}
-            isLoading={isLoading}
-            sessionMode={session.mode || 'explore'}
-            onCopyText={handleCopyText}
-            onMessageContextMenu={handleMessageContextMenu}
-            copiedId={copiedId}
-            scrollRef={scrollRef}
-            hasAnyKey={!!hasAnyKey}
-        />
+        {visibleModels.length === 0 ? (
+             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in-95 duration-500 z-10">
+                <div className="w-20 h-20 bg-[var(--bg-elevated)] rounded-[2rem] flex items-center justify-center mb-6 shadow-xl border border-[var(--border)] relative overflow-hidden group cursor-pointer" onClick={() => onChangeView('settings')}>
+                    <div className="absolute inset-0 bg-gradient-to-tr from-[var(--accent)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <Settings className="w-10 h-10 text-[var(--text-main)] transition-transform duration-500 group-hover:rotate-45" strokeWidth={1.5} />
+                </div>
+                <h2 className="text-2xl font-bold text-[var(--text-main)] mb-3 tracking-tight">Configuration Needed</h2>
+                <p className="text-[var(--text-dim)] max-w-sm text-sm leading-relaxed mb-8 font-medium">
+                    To start using Shuper, please add your API keys and enable at least one model in the settings.
+                </p>
+                <button 
+                    onClick={() => onChangeView('settings')}
+                    className="px-8 py-3.5 bg-[var(--text-main)] text-[var(--bg-primary)] rounded-2xl font-bold text-sm hover:scale-105 transition-all shadow-lg shadow-[var(--text-main)]/10 active:scale-95 flex items-center gap-2.5 group"
+                >
+                    <span>Open Settings</span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+            </div>
+        ) : (
+            <MessageHistoryMemo 
+                messages={messages}
+                isLoading={isLoading}
+                sessionMode={session.mode || 'explore'}
+                onCopyText={handleCopyText}
+                onMessageContextMenu={handleMessageContextMenu}
+                copiedId={copiedId}
+                scrollRef={scrollRef}
+                hasAnyKey={!!hasAnyKey}
+            />
+        )}
 
         {messageContextMenu && (
             <>
@@ -464,6 +442,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 </div>
             </>
         )}
+
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[var(--bg-tertiary)] via-[var(--bg-tertiary)]/80 to-transparent pointer-events-none z-20" />
 
         <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 z-30 flex justify-center">
              <InputArea 

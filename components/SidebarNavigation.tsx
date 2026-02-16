@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   SquarePen, 
@@ -63,7 +64,10 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
   const [isLabelsExpanded, setIsLabelsExpanded] = useState(false);
 
   return (
-    <div className="w-[260px] flex-shrink-0 bg-[var(--bg-primary)] flex flex-col h-full text-[var(--text-muted)] text-[14px] z-20 transition-all duration-300">
+    <div 
+      className="w-[260px] flex-shrink-0 bg-[var(--bg-primary)] flex flex-col h-full text-[var(--text-muted)] text-[14px] z-20 transition-all duration-300"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div className="h-14 flex items-center px-4 justify-between">
         <div 
             className={`flex items-center gap-2 cursor-pointer transition-all select-none group ${isLogoGlowing ? 'logo-glow' : ''}`} 

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { 
@@ -6,7 +7,8 @@ import {
   CheckCircle2, 
   XCircle, 
   Archive, 
-  CircleDot
+  CircleDot,
+  Contrast
 } from 'lucide-react';
 import { SessionStatus } from '../types';
 
@@ -21,6 +23,7 @@ interface StatusSelectorProps {
 export const STATUS_CONFIG: Record<SessionStatus, { label: string; icon: React.ElementType; color: string }> = {
   backlog: { label: 'Backlog', icon: CircleDashed, color: 'text-[#737373]' },
   todo: { label: 'Todo', icon: Circle, color: 'text-[#A1A1A1]' },
+  in_progress: { label: 'In Progress', icon: Contrast, color: 'text-[#3B82F6]' },
   needs_review: { label: 'Needs Review', icon: CircleDot, color: 'text-[#F59E0B]' },
   done: { label: 'Done', icon: CheckCircle2, color: 'text-[#10B981]' },
   cancelled: { label: 'Cancelled', icon: XCircle, color: 'text-[#737373]' },
@@ -30,7 +33,7 @@ export const STATUS_CONFIG: Record<SessionStatus, { label: string; icon: React.E
 export const StatusSelector: React.FC<StatusSelectorProps> = ({ currentStatus, onSelect, onClose, isOpen, position }) => {
   if (!isOpen) return null;
 
-  const statuses: SessionStatus[] = ['backlog', 'todo', 'needs_review', 'done', 'cancelled', 'archive'];
+  const statuses: SessionStatus[] = ['backlog', 'todo', 'in_progress', 'needs_review', 'done', 'cancelled', 'archive'];
   
   const fixedStyle: React.CSSProperties = {
     position: 'fixed',

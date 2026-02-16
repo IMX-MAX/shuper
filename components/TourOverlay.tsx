@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ChevronRight, ChevronLeft, X, Rocket, Zap, Sparkles, Settings, MessageSquare, Target, PlusCircle, ListTodo, Key, Cpu } from 'lucide-react';
 
@@ -168,7 +169,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({ onComplete, onSkip, on
       )}
 
       <div 
-        className="absolute w-[320px] bg-[var(--bg-secondary)] border border-[var(--border)] rounded-3xl p-6 shadow-2xl transition-all duration-300 animate-in fade-in zoom-in-95"
+        className="absolute w-[320px] bg-[var(--bg-secondary)] border border-[var(--border)] rounded-3xl p-6 shadow-2xl transition-all duration-300 animate-fly-in-up"
         style={cardPosition}
       >
         <button 

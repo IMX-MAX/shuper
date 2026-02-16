@@ -18,7 +18,9 @@ import {
   Users, 
   Check, 
   BookOpen, 
-  PenLine 
+  PenLine,
+  Database,
+  AppWindow
 } from 'lucide-react';
 import { Attachment, Agent, Label, SessionStatus, SessionMode, GEMINI_MODELS, OPENROUTER_FREE_MODELS, DEEPSEEK_MODELS, MOONSHOT_MODELS } from '../types';
 import { ModelSelector } from './ModelSelector';
@@ -87,7 +89,6 @@ export const InputArea: React.FC<InputAreaProps> = ({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [localText, setLocalText] = useState(draftValue);
   
-  // Ref to track the version of draft we've successfully synced to parent
   const lastSyncedDraft = useRef(draftValue);
   
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
@@ -99,7 +100,6 @@ export const InputArea: React.FC<InputAreaProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const statusBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Synchronize when switching sessions (draftValue changes drastically)
   useEffect(() => {
     if (draftValue !== lastSyncedDraft.current) {
         setLocalText(draftValue);
@@ -107,12 +107,10 @@ export const InputArea: React.FC<InputAreaProps> = ({
     }
   }, [draftValue]);
 
-  // Synchronize external values (edits or prompt commands)
   useEffect(() => {
     if (externalValue !== undefined && externalValue !== null && externalValue !== '') {
       setLocalText(externalValue);
       lastSyncedDraft.current = externalValue;
-      // Use requestAnimationFrame to ensure focus happens after DOM updates
       requestAnimationFrame(() => {
         if (textareaRef.current) {
           textareaRef.current.focus();
@@ -122,7 +120,6 @@ export const InputArea: React.FC<InputAreaProps> = ({
     }
   }, [externalValue]);
 
-  // Debounced sync back to parent for persistence (1s for performance)
   useEffect(() => {
     const handler = setTimeout(() => {
         if (localText !== lastSyncedDraft.current) {
@@ -133,23 +130,15 @@ export const InputArea: React.FC<InputAreaProps> = ({
     return () => clearTimeout(handler);
   }, [localText, onDraftChange]);
 
-  // Surgical Global Auto-Focus
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-        // 1. Exit if an input is already focused
         const active = document.activeElement;
         if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
-
-        // 2. Exit if it's a modifier key combo
         if (e.metaKey || e.ctrlKey || e.altKey) return;
-        
-        // 3. Focus if it's a printable character
         if (e.key.length === 1) {
             textareaRef.current?.focus();
         }
     };
-    
-    // Use capture to catch it before other elements
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
@@ -166,15 +155,15 @@ export const InputArea: React.FC<InputAreaProps> = ({
     return false;
   }, [currentModel, currentMode, agents, hasOpenRouterKey, hasDeepSeekKey, hasMoonshotKey]);
 
-  // Direct DOM manipulation for height to avoid React re-render cycle stutters
   const updateHeight = useCallback(() => {
     const el = textareaRef.current;
     if (el) {
       el.style.height = 'auto';
       const scrollHeight = el.scrollHeight;
-      const finalHeight = Math.max(34, Math.min(scrollHeight, 200)); 
+      // Allow enough height for 3 lines comfortably (around 70-80px), min-height 60px
+      const finalHeight = Math.max(64, Math.min(scrollHeight, 240)); 
       el.style.height = `${finalHeight}px`;
-      el.style.overflowY = scrollHeight > 200 ? 'auto' : 'hidden';
+      el.style.overflowY = scrollHeight > 240 ? 'auto' : 'hidden';
     }
   }, []);
 
@@ -221,7 +210,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
       setAttachments([]);
       
       if (textareaRef.current) {
-          textareaRef.current.style.height = '34px';
+          textareaRef.current.style.height = '64px';
           textareaRef.current.style.overflowY = 'hidden';
       }
   };
@@ -256,6 +245,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
   const activeAgent = agents.find(a => a.id === currentModel);
   const getModelNameDisplay = () => {
     if (currentMode === 'council') return `Council (${councilModels.length}/3)`;
+    if (!currentModel) return "Select Model"; // Updated fallback
     if (!isCurrentModelValid) return "Key Required";
     if (activeAgent) return activeAgent.name;
     const parts = currentModel.split('/');
@@ -271,9 +261,10 @@ export const InputArea: React.FC<InputAreaProps> = ({
   };
 
   const ModeIcon = currentMode === 'explore' ? Compass : (currentMode === 'execute' ? RefreshCcw : Users);
+  const StatusIcon = STATUS_CONFIG[currentStatus].icon;
 
   return (
-    <div id="tour-input-area" className="w-full max-w-3xl floating-input-shadow rounded-2xl bg-[var(--input-bg)] border border-[var(--border)] overflow-visible relative">
+    <div id="tour-input-area" className="w-full max-w-3xl floating-input-shadow rounded-3xl bg-[var(--input-bg)] border border-[var(--border)] overflow-visible relative flex flex-col">
       {isEditing && (
           <div className="absolute -top-8 left-0 right-0 flex items-center justify-center animate-in fade-in slide-in-from-bottom-2">
               <div className="bg-[var(--bg-elevated)] border border-[var(--border)] rounded-full px-4 py-1 flex items-center gap-2 text-[11px] font-bold text-[var(--text-main)] shadow-lg">
@@ -285,8 +276,54 @@ export const InputArea: React.FC<InputAreaProps> = ({
           </div>
       )}
 
+      {/* Header with Mode and Status */}
+      <div className="flex items-center justify-between px-5 pt-3 pb-1">
+          <div className="relative">
+              <button 
+                onClick={() => setIsModeMenuOpen(!isModeMenuOpen)}
+                className="flex items-center gap-2 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors group"
+              >
+                <ModeIcon className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 transition-opacity" />
+                <span className="capitalize">{currentMode}</span>
+                <ChevronDown className={`w-3 h-3 opacity-30 transition-transform duration-200 ${isModeMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isModeMenuOpen && (
+                  <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsModeMenuOpen(false)} />
+                      <div className="absolute top-full left-0 mt-2 w-44 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] py-2 z-50 overflow-hidden animate-in fade-in zoom-in-95 origin-top-left backdrop-blur-xl">
+                          <div onClick={() => { onUpdateMode('explore'); setIsModeMenuOpen(false); }} className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${currentMode === 'explore' ? 'bg-[var(--bg-elevated)] text-[var(--text-main)]' : 'text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-elevated)]'}`}>
+                              <span className="text-[11px] font-bold">Explore</span>
+                              <Compass className="w-3.5 h-3.5" />
+                          </div>
+                          <div onClick={() => { onUpdateMode('execute'); setIsModeMenuOpen(false); }} className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${currentMode === 'execute' ? 'bg-[var(--bg-elevated)] text-[var(--text-main)]' : 'text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-elevated)]'}`}>
+                              <span className="text-[11px] font-bold">Execute</span>
+                              <RefreshCcw className="w-3.5 h-3.5" />
+                          </div>
+                          <div onClick={() => { onUpdateMode('council'); setIsModeMenuOpen(false); }} className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${currentMode === 'council' ? 'bg-[var(--bg-elevated)] text-[var(--text-main)]' : 'text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-elevated)]'}`}>
+                              <span className="text-[11px] font-bold">Council</span>
+                              <Users className="w-3.5 h-3.5" />
+                          </div>
+                      </div>
+                  </>
+              )}
+          </div>
+          
+          <div className="flex items-center gap-1.5">
+              <button 
+                  ref={statusBtnRef}
+                  onClick={() => setIsStatusMenuOpen(true)}
+                  className="flex items-center gap-2 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors group"
+              >
+                  <StatusIcon className={`w-3.5 h-3.5 ${STATUS_CONFIG[currentStatus].color}`} />
+                  <span className="capitalize">{STATUS_CONFIG[currentStatus].label}</span>
+                  <ChevronDown className="w-3 h-3 opacity-30" />
+              </button>
+              <StatusSelector isOpen={isStatusMenuOpen} onClose={() => setIsStatusMenuOpen(false)} currentStatus={currentStatus} onSelect={onUpdateStatus} position={getStatusBtnCoords()} />
+          </div>
+      </div>
+
       {attachments.length > 0 && (
-          <div className="flex gap-2 p-2 px-3 overflow-x-auto custom-scrollbar border-b border-[var(--border)]">
+          <div className="flex gap-2 p-3 px-5 overflow-x-auto custom-scrollbar">
               {attachments.map((att, index) => (
                   <div key={index} className="flex items-center gap-2 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-[11px] text-[var(--text-main)] flex-shrink-0 animate-in zoom-in-95 duration-200">
                       <div className="w-4 h-4 bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center rounded">
@@ -304,116 +341,78 @@ export const InputArea: React.FC<InputAreaProps> = ({
           </div>
       )}
 
-      <div className="p-2.5">
-        <div className="flex items-center justify-between mb-1.5">
-            <div className="relative">
-                <button 
-                  onClick={() => setIsModeMenuOpen(!isModeMenuOpen)}
-                  className="flex items-center gap-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-tertiary)] px-2.5 py-1 rounded-xl border border-[var(--border)] text-[10px] font-black text-[var(--text-muted)] tracking-widest transition-all active:scale-95 group"
-                >
-                  <ModeIcon className="w-3 h-3 transition-transform" />
-                  <span className="capitalize">{currentMode}</span>
-                  <ChevronDown className={`w-2.5 h-2.5 opacity-30 transition-transform duration-200 ${isModeMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isModeMenuOpen && (
-                    <>
-                        <div className="fixed inset-0 z-40" onClick={() => setIsModeMenuOpen(false)} />
-                        <div className="absolute bottom-full left-0 mb-3 w-44 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] py-2 z-50 overflow-hidden animate-in fade-in zoom-in-95 origin-bottom-left backdrop-blur-xl">
-                            <div onClick={() => { onUpdateMode('explore'); setIsModeMenuOpen(false); }} className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${currentMode === 'explore' ? 'bg-[var(--bg-elevated)] text-[var(--text-main)]' : 'text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-elevated)]'}`}>
-                                <span className="text-[11px] font-bold">Explore</span>
-                                <Compass className="w-3.5 h-3.5" />
-                            </div>
-                            <div onClick={() => { onUpdateMode('execute'); setIsModeMenuOpen(false); }} className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${currentMode === 'execute' ? 'bg-[var(--bg-elevated)] text-[var(--text-main)]' : 'text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-elevated)]'}`}>
-                                <span className="text-[11px] font-bold">Execute</span>
-                                <RefreshCcw className="w-3.5 h-3.5" />
-                            </div>
-                            <div onClick={() => { onUpdateMode('council'); setIsModeMenuOpen(false); }} className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${currentMode === 'council' ? 'bg-[var(--bg-elevated)] text-[var(--text-main)]' : 'text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-elevated)]'}`}>
-                                <span className="text-[11px] font-bold">Council</span>
-                                <Users className="w-3.5 h-3.5" />
-                            </div>
-                        </div>
-                    </>
-                )}
-            </div>
-            
-            <div className="flex items-center gap-1.5">
-                <button 
-                    ref={statusBtnRef}
-                    onClick={() => setIsStatusMenuOpen(true)}
-                    className="p-1.5 rounded-full hover:bg-[var(--bg-elevated)] transition-all group active:scale-90"
-                >
-                    <Circle className={`w-3.5 h-3.5 ${STATUS_CONFIG[currentStatus].color} opacity-60 group-hover:opacity-100 transition-opacity`} />
-                </button>
-                <StatusSelector isOpen={isStatusMenuOpen} onClose={() => setIsStatusMenuOpen(false)} currentStatus={currentStatus} onSelect={onUpdateStatus} position={getStatusBtnCoords()} />
-            </div>
-        </div>
-
+      <div className="px-5 py-2">
         <textarea
           ref={textareaRef}
           value={localText}
           onChange={(e) => setLocalText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isLoading ? "Working..." : "What's on your mind?"}
-          className="w-full bg-transparent border-0 text-[var(--text-main)] placeholder-[var(--text-dim)] px-2.5 py-1 focus:ring-0 focus:outline-none resize-none min-h-[34px] max-h-[200px] custom-scrollbar text-[15px] font-medium leading-relaxed overflow-hidden transition-all duration-200 ease-out"
+          placeholder={isLoading ? "Working..." : "Ask anything..."}
+          className="w-full bg-transparent border-0 text-[var(--text-main)] placeholder-[var(--text-dim)] px-0 py-0 focus:ring-0 focus:outline-none resize-none min-h-[64px] max-h-[240px] custom-scrollbar text-[13px] leading-relaxed font-medium overflow-hidden transition-all duration-200 ease-out"
           rows={1}
         />
+      </div>
 
-        <div className="flex items-center justify-between mt-1 px-1">
-            <div className="flex items-center gap-2">
-                <input 
-                    type="file" 
-                    multiple 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    onChange={handleFileSelect} 
-                    accept="application/pdf,image/jpeg,image/png,image/webp,text/plain"
-                />
-                <button onClick={() => fileInputRef.current?.click()} className="p-1.5 rounded-xl text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-elevated)] transition-all"><Paperclip className="w-4.5 h-4.5" /></button>
-            </div>
-            <div className="flex items-center gap-3">
-                <div className="relative">
-                    <button 
-                        id="tour-model-selector"
-                        onClick={() => currentMode === 'council' ? setIsCouncilPickerOpen(true) : setIsModelMenuOpen(!isModelMenuOpen)}
-                        className={`text-[10px] font-black tracking-[0.05em] flex items-center gap-1.5 transition-all px-2 py-1 rounded-lg hover:bg-[var(--bg-elevated)] ${!isCurrentModelValid ? 'text-red-400' : 'text-[var(--text-dim)] hover:text-[var(--text-main)]'}`}
-                    >
-                        <span className="max-w-[150px] truncate uppercase">{getModelNameDisplay()}</span>
-                        <ChevronDown className="w-2.5 h-2.5 opacity-30" />
-                    </button>
-                    {currentMode === 'council' ? (
-                        isCouncilPickerOpen && (
-                            <>
-                                <div className="fixed inset-0 z-[100]" onClick={() => setIsCouncilPickerOpen(false)} />
-                                <div className="absolute bottom-full right-0 mb-3 w-64 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-2xl shadow-2xl p-4 z-[110] animate-in fade-in zoom-in-95 origin-bottom-right">
-                                    <h4 className="text-[10px] font-black uppercase text-[var(--text-dim)] mb-3 tracking-widest px-1">Select 3 Models</h4>
-                                    <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                        {[...GEMINI_MODELS, ...OPENROUTER_FREE_MODELS].map(mId => (
-                                            <div key={mId} onClick={() => toggleCouncilModel(mId)} className="flex items-center justify-between px-3 py-2 hover:bg-[var(--bg-secondary)] rounded-xl cursor-pointer group transition-colors">
-                                                <span className={`text-[12px] font-bold truncate max-w-[160px] ${councilModels.includes(mId) ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>{mId.split('/').pop()?.split(':')[0]}</span>
-                                                {councilModels.includes(mId) && <Check className="w-3.5 h-3.5 text-[var(--accent)]" />}
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-center justify-between px-1">
-                                        <span className="text-[9px] font-bold text-[var(--text-dim)] uppercase">Ready to deliberate</span>
-                                        <button onClick={() => setIsCouncilPickerOpen(false)} className="px-3 py-1 bg-[var(--text-main)] text-[var(--bg-primary)] rounded-lg text-[10px] font-bold">Done</button>
-                                    </div>
-                                </div>
-                            </>
-                        )
-                    ) : (
-                        <ModelSelector isOpen={isModelMenuOpen} onClose={() => setIsModelMenuOpen(false)} currentModel={currentModel} onSelect={onSelectModel} visibleModels={visibleModels} agents={agents} hasOpenRouterKey={hasOpenRouterKey} hasDeepSeekKey={hasDeepSeekKey} hasMoonshotKey={hasMoonshotKey} />
-                    )}
-                </div>
-                <button 
-                    onClick={handleSend} 
-                    disabled={(!localText.trim() && attachments.length === 0 && !isLoading) || !isCurrentModelValid}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${((!localText.trim() && attachments.length === 0 && !isLoading) || !isCurrentModelValid) ? 'bg-[var(--bg-elevated)] text-[var(--text-dim)] opacity-50' : 'bg-[var(--accent)] text-[var(--bg-primary)] hover:scale-105 shadow-lg active:scale-95'}`}
-                >
-                    {isLoading ? <div className="w-2.5 h-2.5 bg-current rounded-[1px] animate-pulse" /> : (isEditing ? <Check className="w-4 h-4" strokeWidth={3} /> : <ArrowUp className="w-4 h-4" strokeWidth={2.5} />)}
-                </button>
-            </div>
-        </div>
+      <div className="px-5 pb-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+              <input 
+                  type="file" 
+                  multiple 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  onChange={handleFileSelect} 
+                  accept="application/pdf,image/jpeg,image/png,image/webp,text/plain"
+              />
+              <button onClick={() => fileInputRef.current?.click()} className="text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"><Paperclip className="w-5 h-5" /></button>
+              <button className="text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"><Database className="w-5 h-5" /></button>
+              <button className="text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"><AppWindow className="w-5 h-5" /></button>
+          </div>
+          
+          <div className="flex items-center gap-4">
+              <div className="relative">
+                  <button 
+                      id="tour-model-selector"
+                      onClick={() => currentMode === 'council' ? setIsCouncilPickerOpen(true) : setIsModelMenuOpen(!isModelMenuOpen)}
+                      className={`text-[12px] font-medium flex items-center gap-1.5 transition-all hover:text-[var(--text-main)] ${!isCurrentModelValid ? 'text-red-400' : 'text-[var(--text-dim)]'}`}
+                  >
+                      <span className="max-w-[150px] truncate">{getModelNameDisplay()}</span>
+                      <ChevronDown className="w-3 h-3 opacity-50" />
+                  </button>
+                  {/* Model Dropdown Logic */}
+                  {currentMode === 'council' ? (
+                      isCouncilPickerOpen && (
+                          <>
+                              <div className="fixed inset-0 z-[100]" onClick={() => setIsCouncilPickerOpen(false)} />
+                              <div className="absolute bottom-full right-0 mb-3 w-64 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-2xl shadow-2xl p-4 z-[110] animate-in fade-in zoom-in-95 origin-bottom-right">
+                                  <h4 className="text-[10px] font-black uppercase text-[var(--text-dim)] mb-3 tracking-widest px-1">Select 3 Models</h4>
+                                  <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                      {[...GEMINI_MODELS, ...OPENROUTER_FREE_MODELS].map(mId => (
+                                          <div key={mId} onClick={() => toggleCouncilModel(mId)} className="flex items-center justify-between px-3 py-2 hover:bg-[var(--bg-secondary)] rounded-xl cursor-pointer group transition-colors">
+                                              <span className={`text-[12px] font-bold truncate max-w-[160px] ${councilModels.includes(mId) ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>{mId.split('/').pop()?.split(':')[0]}</span>
+                                              {councilModels.includes(mId) && <Check className="w-3.5 h-3.5 text-[var(--accent)]" />}
+                                          </div>
+                                      ))}
+                                  </div>
+                                  <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-center justify-between px-1">
+                                      <span className="text-[9px] font-bold text-[var(--text-dim)] uppercase">Ready to deliberate</span>
+                                      <button onClick={() => setIsCouncilPickerOpen(false)} className="px-3 py-1 bg-[var(--text-main)] text-[var(--bg-primary)] rounded-lg text-[10px] font-bold">Done</button>
+                                  </div>
+                              </div>
+                          </>
+                      )
+                  ) : (
+                      <ModelSelector isOpen={isModelMenuOpen} onClose={() => setIsModelMenuOpen(false)} currentModel={currentModel} onSelect={onSelectModel} visibleModels={visibleModels} agents={agents} hasOpenRouterKey={hasOpenRouterKey} hasDeepSeekKey={hasDeepSeekKey} hasMoonshotKey={hasMoonshotKey} />
+                  )}
+              </div>
+              
+              <button 
+                  onClick={handleSend} 
+                  disabled={(!localText.trim() && attachments.length === 0 && !isLoading) || !isCurrentModelValid}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${((!localText.trim() && attachments.length === 0 && !isLoading) || !isCurrentModelValid) ? 'bg-[#333] text-[#666] opacity-50' : 'bg-white text-black hover:scale-105 shadow-lg active:scale-95'}`}
+              >
+                  {isLoading ? <div className="w-2.5 h-2.5 bg-current rounded-[1px] animate-pulse" /> : (isEditing ? <Check className="w-4 h-4" strokeWidth={3} /> : <ArrowUp className="w-4 h-4" strokeWidth={2.5} />)}
+              </button>
+          </div>
       </div>
     </div>
   );

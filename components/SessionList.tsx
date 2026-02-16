@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, Inbox, X, Flag, Tag, Archive, Menu, Circle, MessageSquareDashed, Loader2 } from 'lucide-react';
 import { Session, SessionStatus, Label } from '../types';
@@ -86,26 +87,31 @@ export const SessionList: React.FC<SessionListProps> = ({
     const updateIndicator = () => {
         if (activeSessionId && listRef.current) {
             const activeElement = listRef.current.querySelector(`[data-session-id="${activeSessionId}"]`) as HTMLElement;
-            const innerBox = activeElement?.querySelector('.session-item-box') as HTMLElement;
             
-            if (innerBox && listRef.current) {
-                const containerRect = listRef.current.getBoundingClientRect();
-                const boxRect = innerBox.getBoundingClientRect();
-                const relativeTop = boxRect.top - containerRect.top + listRef.current.scrollTop;
-                
-                setIndicatorStyle({
-                    opacity: 1,
-                    transform: `translateY(${relativeTop}px)`,
-                    height: `${boxRect.height}px`,
-                    width: '3px',
-                    left: '0px', 
-                    top: '0px',
-                    borderRadius: '0px 2px 2px 0px'
-                });
+            // Explicitly check if the element exists in the current DOM (filtered list)
+            if (activeElement) {
+                const innerBox = activeElement.querySelector('.session-item-box') as HTMLElement;
+                if (innerBox) {
+                    const containerRect = listRef.current.getBoundingClientRect();
+                    const boxRect = innerBox.getBoundingClientRect();
+                    const relativeTop = boxRect.top - containerRect.top + listRef.current.scrollTop;
+                    
+                    setIndicatorStyle({
+                        opacity: 1,
+                        transform: `translateY(${relativeTop}px)`,
+                        height: `${boxRect.height}px`,
+                        width: '3px',
+                        left: '0px', 
+                        top: '0px',
+                        borderRadius: '0px 2px 2px 0px'
+                    });
+                    return; // Successfully set, exit
+                }
             }
-        } else {
-            setIndicatorStyle({ opacity: 0 });
         }
+        
+        // Default / Fallback: Hide indicator if session not found or filtered out
+        setIndicatorStyle(prev => ({ ...prev, opacity: 0 }));
     };
 
     // Use requestAnimationFrame for smoother updates during layout changes
