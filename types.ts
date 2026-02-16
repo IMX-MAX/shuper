@@ -83,24 +83,19 @@ export interface UserSettings {
       gemini: string;
       openRouter: string;
       openRouterAlt: string;
-      deepSeek: string;
-      moonshot: string;
+      routeway: string;
   };
 }
 
 export const OPENROUTER_FREE_MODELS = [
     'stepfun/step-3.5-flash:free',
-    'arcee-ai/trinity-large-preview:free',
     'liquid/lfm-2.5-1.2b-thinking:free',
     'nvidia/nemotron-3-nano-30b-a3b:free',
     'arcee-ai/trinity-mini:free',
     'nvidia/nemotron-nano-12b-v2-vl:free',
     'qwen/qwen3-next-80b-a3b-instruct:free',
-    'openai/gpt-oss-120b:free',
-    'z-ai/glm-4.5-air:free',
     'qwen/qwen3-coder:free',
     'google/gemma-3n-e2b-it:free',
-    'deepseek/deepseek-r1-0528:free',
     'mistralai/mistral-small-3.1-24b-instruct:free'
 ];
 
@@ -111,12 +106,40 @@ export const GEMINI_MODELS = [
     'gemini-flash-lite-latest'
 ];
 
-export const DEEPSEEK_MODELS = [
-    'deepseek-chat',
-    'deepseek-reasoner'
+export const ROUTEWAY_MODELS = [
+    'deepseek-r1:free',
+    'kimi-k2-0905:free',
+    'devstral-2512:free',
+    'minimax-m2:free',
+    'glm-4.5-air:free',
+    'llama-3.2-3b-instruct:free',
+    'gpt-oss-120b:free'
 ];
 
-export const MOONSHOT_MODELS = [
-    'moonshot-v1-8k',
-    'moonshot-v1-32k'
-];
+export const MODEL_FRIENDLY_NAMES: Record<string, string> = {
+    // Gemini
+    'gemini-3-flash-preview': 'Gemini 3 Flash',
+    'gemini-3-pro-preview': 'Gemini 3 Pro',
+    'gemini-flash-latest': 'Gemini 2.5 Flash',
+    'gemini-flash-lite-latest': 'Gemini 2.5 Flash Lite',
+    
+    // OpenRouter
+    'stepfun/step-3.5-flash:free': 'Step 3.5 Flash',
+    'liquid/lfm-2.5-1.2b-thinking:free': 'Liquid LFM 2.5',
+    'nvidia/nemotron-3-nano-30b-a3b:free': 'Nemotron 3 Nano',
+    'arcee-ai/trinity-mini:free': 'Trinity Mini',
+    'nvidia/nemotron-nano-12b-v2-vl:free': 'Nemotron Nano 12B',
+    'qwen/qwen3-next-80b-a3b-instruct:free': 'Qwen 3 Next 80B',
+    'qwen/qwen3-coder:free': 'Qwen 3 Coder',
+    'google/gemma-3n-e2b-it:free': 'Gemma 3N',
+    'mistralai/mistral-small-3.1-24b-instruct:free': 'Mistral Small 3.1',
+    
+    // Routeway
+    'deepseek-r1:free': 'DeepSeek R1',
+    'kimi-k2-0905:free': 'Kimi K2',
+    'devstral-2512:free': 'Devstral',
+    'minimax-m2:free': 'Minimax M2',
+    'glm-4.5-air:free': 'GLM 4.5 Air',
+    'llama-3.2-3b-instruct:free': 'Llama 3.2 3B',
+    'gpt-oss-120b:free': 'GPT OSS 120B'
+};

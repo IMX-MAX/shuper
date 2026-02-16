@@ -18,8 +18,7 @@ import {
     Attachment, 
     OPENROUTER_FREE_MODELS, 
     GEMINI_MODELS, 
-    DEEPSEEK_MODELS, 
-    MOONSHOT_MODELS, 
+    ROUTEWAY_MODELS,
     SessionMode
 } from './types';
 import { sendMessageToGemini, generateSessionTitle } from './services/geminiService';
@@ -51,14 +50,13 @@ const DEFAULT_SETTINGS: UserSettings = {
         gemini: '',
         openRouter: '',
         openRouterAlt: '',
-        deepSeek: '',
-        moonshot: ''
+        routeway: ''
     }
 };
 
 const getSystemInstruction = (userName: string, mode: SessionMode, availableLabels: Label[]) => `
 IDENTITY:
-You are a high-performance assistant.
+You are a high-performance assistant operating within the "Shuper" workspace environment.
 CURRENT MODE: ${mode.toUpperCase()}
 
 STRICT CONVERSATION RULES:
@@ -299,7 +297,7 @@ const App: React.FC = () => {
   const abortControllers = useRef<Record<string, AbortController>>({});
 
   const hasAnyKey = useMemo(() => {
-    return !!(process.env.API_KEY || settings.apiKeys.gemini || settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt || settings.apiKeys.deepSeek || settings.apiKeys.moonshot);
+    return !!(process.env.API_KEY || settings.apiKeys.gemini || settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt || settings.apiKeys.routeway);
   }, [settings.apiKeys]);
 
   const createSessionObject = (): Session => ({
@@ -496,7 +494,7 @@ const App: React.FC = () => {
         }
         return next;
     });
-  };
+    };
 
   const handleUpdateSettings = useCallback((newSettings: UserSettings) => {
     setSettings(newSettings);
@@ -512,13 +510,6 @@ const App: React.FC = () => {
 
       // Clear new response badge when selecting a session
       setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, hasNewResponse: false } : s) : prev);
-
-      // We do NOT set a default model here if one doesn't exist, to support "no model selected" state.
-      // The previous logic was:
-      // if (!sessionModels[id] && hasAnyKey) {
-      //   const defaultModel = settings.defaultModel || settings.visibleModels[0] || GEMINI_MODELS[0];
-      //   setSessionModels(prev => ({ ...prev, [id]: defaultModel }));
-      // }
   };
 
   const handleNewSession = () => {
@@ -710,7 +701,7 @@ const App: React.FC = () => {
                 [currentSessionId]: (prev[currentSessionId] || []).map(m => m.id === aiMessageId ? { ...m, thoughtProcess: 'Convening the Council: Models are deliberating in parallel...', model: 'council' } : m)
             }));
 
-            // Fetch parallel responses - Pass modelId directly
+            // Fetch parallel responses
             const modelResponses = await Promise.all(activeSession.councilModels.map(async (mId) => {
                 const res = await sendMessageToGemini(
                     text, 
@@ -720,20 +711,33 @@ const App: React.FC = () => {
                     false, 
                     undefined, 
                     settings.apiKeys, 
-                    mId, // Critical: pass specific model ID here
+                    mId,
                     'explore', 
                     controller.signal
                 );
-                return `Response from [${mId}]:\n${res.text}`;
+                return { model: mId, text: res.text };
             }));
 
-            const synthesisPrompt = `You are the Council Synthesizer. Review the following 3 responses to the user query: "${text}". 
+            const responsesText = modelResponses.map(r => `Response from [${r.model}]:\n${r.text}`).join('\n\n---\n\n');
+
+            const synthesisPrompt = `You are the Council Synthesizer. Review the following responses from different AI models to the user query: "${text}". 
             Resolve conflicts where possible, highlight key differences, and present a final unified answer. 
             MANDATORY: Include a comparison table showing where the models agree and disagree.
             
-            ${modelResponses.join('\n\n---\n\n')}`;
+            ${responsesText}`;
 
             response = await sendMessageToGemini(synthesisPrompt, historyData, systemInstruction, [], false, onStreamUpdate, settings.apiKeys, 'gemini-3-flash-preview', 'explore', controller.signal);
+            
+            // Append the raw outputs to the synthesized response
+            let finalOutput = response.text + "\n\n---\n\n### 🏛️ Council Records\n\n";
+            
+            modelResponses.forEach(r => {
+                const modelName = r.model.split('/').pop()?.split(':')[0] || r.model;
+                finalOutput += `<details><summary><strong>${modelName}</strong></summary>\n\n${r.text}\n\n</details>\n\n`;
+            });
+            
+            response.text = finalOutput;
+
         } else {
             response = await sendMessageToGemini(
                 text, 
@@ -789,6 +793,37 @@ const App: React.FC = () => {
     setAvailableLabels(DEFAULT_LABELS);
     setActiveSessionId(null);
     handleNewSession();
+  };
+
+  const handleImportWorkspace = (data: any) => {
+      if (!data) return;
+      try {
+          // Basic Validation
+          if (!data.settings || !data.sessions) throw new Error("Invalid backup file");
+
+          // Direct LocalStorage Write to prevent React state race conditions during restore
+          try {
+              window.localStorage.setItem('shuper_settings', JSON.stringify(data.settings));
+              window.localStorage.setItem('shuper_sessions', JSON.stringify(data.sessions));
+              
+              if (data.messages) window.localStorage.setItem('shuper_messages', JSON.stringify(data.messages));
+              if (data.agents) window.localStorage.setItem('shuper_agents', JSON.stringify(data.agents));
+              if (data.labels) window.localStorage.setItem('shuper_labels', JSON.stringify(data.labels));
+              if (data.sessionModels) window.localStorage.setItem('shuper_session_models', JSON.stringify(data.sessionModels));
+          } catch (e: any) {
+              if (e.name === 'QuotaExceededError') {
+                  alert('Storage limit exceeded. Import failed. Try clearing data first.');
+                  return;
+              }
+              throw e;
+          }
+          
+          // Force reload to apply changes from a clean state
+          window.location.reload(); 
+      } catch (e) {
+          console.error("Import failed", e);
+          alert('Failed to import workspace. The file might be corrupted.');
+      }
   };
 
   const updateSessionStatus = (id: string, s: SessionStatus) => setSessions(prev => Array.isArray(prev) ? prev.map(sess => sess.id === id ? { ...sess, status: s } : sess) : prev);
@@ -1020,8 +1055,7 @@ const App: React.FC = () => {
                                 onUpdateCouncilModels={(models) => updateCouncilModels(activeSessionId!, models)}
                                 sendKey={settings.sendKey}
                                 hasOpenRouterKey={!!(settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt)}
-                                hasDeepSeekKey={!!settings.apiKeys.deepSeek}
-                                hasMoonshotKey={!!settings.apiKeys.moonshot}
+                                hasRoutewayKey={!!settings.apiKeys.routeway}
                                 onBackToList={() => setIsMobileSessionListOpen(true)}
                                 onOpenSidebar={() => setIsMobileSidebarOpen(true)}
                                 hasAnyKey={hasAnyKey}
@@ -1058,6 +1092,11 @@ const App: React.FC = () => {
                         onUpdateLabels={setAvailableLabels}
                         onClearData={handleClearData}
                         onRepairWorkspace={handleRepairWorkspace}
+                        sessions={sessions}
+                        messages={sessionMessages}
+                        agents={agents}
+                        sessionModels={sessionModels}
+                        onImportWorkspace={handleImportWorkspace}
                     />
                 </div>
             )}
