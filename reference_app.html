@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shuper - Your Favorite AI Executor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #121212;
+            --bg-secondary: #171717;
+            --bg-tertiary: #1C1C1C;
+            --bg-elevated: #262626;
+            --border: #333333;
+            --text-main: #E5E5E5;
+            --text-muted: #A1A1A1;
+            --text-dim: #525252;
+            --accent: #3B82F6;
+        }
+
+        body.light-mode {
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F9F9F9;
+            --bg-tertiary: #F0F0F0;
+            --bg-elevated: #E5E5E5;
+            --border: #E0E0E0;
+            --text-main: #171717;
+            --text-muted: #525252;
+            --text-dim: #A1A1A1;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            margin: 0;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 3px; }
+        
+        .custom-scrollbar { 
+            scrollbar-width: thin; 
+            scrollbar-color: var(--bg-elevated) transparent; 
+        }
+
+        .markdown-body p { margin-bottom: 0.75em; }
+        .markdown-body code {
+            background: var(--bg-elevated);
+            padding: 0.2em 0.4em;
+            border-radius: 0.25em;
+            color: var(--accent);
+            font-size: 0.9em;
+        }
+        .markdown-body pre {
+            background: #1a1a1a;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            border: 1px solid var(--border);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        .truncate-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.0.0",
+        "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.460.0",
+        "react-markdown": "https://esm.sh/react-markdown@9.0.1",
+        "@google/genai": "https://esm.sh/@google/genai@1.41.0"
+      }
+    }
+    </script>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            SquarePen, Inbox, Flag, Tag, Archive, Cpu, Settings, 
+            ChevronLeft, ChevronRight, HelpCircle, Compass, RefreshCcw, 
+            ChevronDown, Paperclip, ArrowUp, Trash2, Search, X, 
+            Circle, CheckCircle2, CircleDashed, CircleDot, Brain,
+            Bot, Plus, Save, Key, Eye, EyeOff, Globe, Palette, Briefcase,
+            MessageSquare, Keyboard, Sparkles, Loader2, Copy, Terminal
+        } from 'lucide-react';
+        import Markdown from 'react-markdown';
+        import { GoogleGenAI } from '@google/genai';
+
+        // --- CONSTANTS & CONFIG ---
+
+        const STATUS_CONFIG = {
+            backlog: { label: 'Backlog', icon: CircleDashed, color: 'text-gray-500' },
+            todo: { label: 'Todo', icon: Circle, color: 'text-gray-400' },
+            needs_review: { label: 'Needs Review', icon: CircleDot, color: 'text-orange-400' },
+            done: { label: 'Done', icon: CheckCircle2, color: 'text-emerald-400' },
+            archived: { label: 'Archived', icon: Archive, color: 'text-gray-500' }
+        };
+
+        const MODE_CONFIG = {
+            explore: { label: 'Explore', icon: Compass, description: 'Standard AI conversation mode' },
+            execute: { label: 'Execute', icon: RefreshCcw, description: 'Advanced task execution mode' }
+        };
+
+        const DEFAULT_LABELS = [
+            { id: 'l1', name: 'Design', color: '#EC4899' },
+            { id: 'l2', name: 'Research', color: '#8B5CF6' },
+            { id: 'l3', name: 'Code', color: '#3B82F6' }
+        ];
+
+        const DEFAULT_SETTINGS = {
+            workspaceName: 'shuper - your favorite AI executor',
+            theme: 'dark',
+            userName: 'Guest User',
+            accentColor: '#3B82F6',
+            baseKnowledge: '',
+            sendKey: 'Enter'
+        };
+
+        // --- COMPONENTS ---
+
+        const ContextMenu = ({ x, y, onClose, onAction, session, labels }) => {
+            const menuRef = useRef(null);
+            const [activeSubmenu, setActiveSubmenu] = useState(null);
+
+            useEffect(() => {
+                const handleClickOutside = (e) => {
+                    if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, [onClose]);
+
+            const menuStyle = {
+                top: Math.min(y, window.innerHeight - 300),
+                left: Math.min(x, window.innerWidth - 220)
+            };
+
+            return (
+                <div 
+                    ref={menuRef}
+                    style={menuStyle}
+                    className="fixed z-50 w-52 bg-[#1F1F1F] border border-[#333] rounded-xl shadow-2xl py-1.5 text-[13px] text-[#A1A1A1] animate-fade-in"
+                >
+                    <div className="px-1.5 space-y-0.5">
+                        <div 
+                            className="flex items-center justify-between px-3 py-2 hover:bg-[#2A2A2A] hover:text-white rounded-lg cursor-pointer group"
+                            onMouseEnter={() => setActiveSubmenu('status')}
+                        >
+                            <div className="flex items-center gap-3"><Circle className="w-4 h-4" /><span>Status</span></div>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                        </div>
+                        {activeSubmenu === 'status' && (
+                            <div className="absolute left-full top-0 ml-1 w-44 bg-[#1F1F1F] border border-[#333] rounded-xl shadow-2xl py-1 animate-fade-in">
+                                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                                    <div key={key} onClick={() => onAction('status', key)} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] hover:text-white cursor-pointer rounded-lg mx-1">
+                                        <cfg.icon className={`w-3.5 h-3.5 ${cfg.color}`} />
+                                        <span>{cfg.label}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div 
+                            className="flex items-center justify-between px-3 py-2 hover:bg-[#2A2A2A] hover:text-white rounded-lg cursor-pointer group"
+                            onMouseEnter={() => setActiveSubmenu('labels')}
+                        >
+                            <div className="flex items-center gap-3"><Tag className="w-4 h-4" /><span>Labels</span></div>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                        </div>
+                        {activeSubmenu === 'labels' && (
+                            <div className="absolute left-full top-10 ml-1 w-44 bg-[#1F1F1F] border border-[#333] rounded-xl shadow-2xl py-1 animate-fade-in">
+                                {labels.map(l => (
+                                    <div key={l.id} onClick={() => onAction('label', l.id)} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] hover:text-white cursor-pointer rounded-lg mx-1">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: l.color }} />
+                                        <span>{l.name}</span>
+                                        {session.labelIds.includes(l.id) && <CheckCircle2 className="w-3.5 h-3.5 ml-auto text-blue-400" />}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div onClick={() => onAction('flag')} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] hover:text-white rounded-lg cursor-pointer">
+                            <Flag className={`w-4 h-4 ${session.isFlagged ? 'fill-red-400 text-red-400' : ''}`} />
+                            <span>{session.isFlagged ? 'Unflag' : 'Flag'}</span>
+                        </div>
+                        <div onClick={() => onAction('archive')} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] hover:text-white rounded-lg cursor-pointer">
+                            <Archive className="w-4 h-4" />
+                            <span>Archive</span>
+                        </div>
+                        <div className="h-[1px] bg-[#333] my-1 mx-2" />
+                        <div onClick={() => onAction('rename')} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] hover:text-white rounded-lg cursor-pointer">
+                            <RefreshCcw className="w-4 h-4" />
+                            <span>Rename</span>
+                        </div>
+                        <div onClick={() => onAction('delete')} className="flex items-center gap-3 px-3 py-2 hover:bg-red-500/20 hover:text-red-400 text-red-400/80 rounded-lg cursor-pointer">
+                            <Trash2 className="w-4 h-4" />
+                            <span>Delete</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            // --- STATE ---
+            const [currentView, setCurrentView] = useState('chat');
+            const [sessions, setSessions] = useState(() => {
+                const saved = localStorage.getItem('shuper_sessions');
+                return saved ? JSON.parse(saved) : [
+                    { id: '1', title: 'API Deployment Plan', status: 'todo', time: 'Just now', mode: 'execute', labelIds: ['l1'], isFlagged: false },
+                    { id: '2', title: 'Feature Research', status: 'needs_review', time: '2h', mode: 'explore', labelIds: [], isFlagged: false }
+                ];
+            });
+            const [messages, setMessages] = useState(() => {
+                const saved = localStorage.getItem('shuper_messages');
+                return saved ? JSON.parse(saved) : {
+                    '1': [
+                        { id: 'm1', role: 'user', content: 'Hey, I need to execute a deployment plan for the new API.' },
+                        { id: 'm2', role: 'assistant', content: 'I see you\'re interested in deployment. To provide a high-fidelity execution plan, please switch to **Execute** mode in the dropdown above.' }
+                    ]
+                };
+            });
+            const [settings, setSettings] = useState(() => {
+                const saved = localStorage.getItem('shuper_settings');
+                return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+            });
+            const [labels, setLabels] = useState(() => {
+                const saved = localStorage.getItem('shuper_labels');
+                return saved ? JSON.parse(saved) : DEFAULT_LABELS;
+            });
+            const [agents, setAgents] = useState(() => {
+                const saved = localStorage.getItem('shuper_agents');
+                return saved ? JSON.parse(saved) : [];
+            });
+
+            const [activeSessionId, setActiveSessionId] = useState('1');
+            const [filter, setFilter] = useState('all');
+            const [searchQuery, setSearchQuery] = useState('');
+            const [chatInput, setChatInput] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [contextMenu, setContextMenu] = useState(null);
+
+            // --- PERSISTENCE ---
+            useEffect(() => localStorage.setItem('shuper_sessions', JSON.stringify(sessions)), [sessions]);
+            useEffect(() => localStorage.setItem('shuper_messages', JSON.stringify(messages)), [messages]);
+            useEffect(() => localStorage.setItem('shuper_settings', JSON.stringify(settings)), [settings]);
+            useEffect(() => localStorage.setItem('shuper_labels', JSON.stringify(labels)), [labels]);
+            useEffect(() => localStorage.setItem('shuper_agents', JSON.stringify(agents)), [agents]);
+
+            useEffect(() => {
+                document.body.className = settings.theme === 'light' ? 'light-mode' : '';
+            }, [settings.theme]);
+
+            // --- DERIVED STATE ---
+            const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+            const currentMessages = messages[activeSessionId] || [];
+
+            const filteredSessions = useMemo(() => {
+                let res = [...sessions];
+                if (filter === 'flagged') res = res.filter(s => s.isFlagged);
+                if (filter === 'archived') res = res.filter(s => s.status === 'archived');
+                else res = res.filter(s => s.status !== 'archived');
+                
+                if (searchQuery) {
+                    res = res.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
+                }
+                return res;
+            }, [sessions, filter, searchQuery]);
+
+            // --- ACTIONS ---
+            const handleNewSession = () => {
+                const id = Date.now().toString();
+                const newSession = { id, title: 'New Session', status: 'todo', time: 'Now', mode: 'explore', labelIds: [], isFlagged: false };
+                setSessions([newSession, ...sessions]);
+                setMessages({ ...messages, [id]: [] });
+                setActiveSessionId(id);
+                setCurrentView('chat');
+            };
+
+            const handleSend = async () => {
+                if (!chatInput.trim() || isLoading) return;
+
+                const userMsg = { id: Date.now().toString(), role: 'user', content: chatInput };
+                const updatedMsgs = [...currentMessages, userMsg];
+                setMessages({ ...messages, [activeSessionId]: updatedMsgs });
+                setChatInput('');
+                setIsLoading(true);
+
+                try {
+                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                    const modelName = activeSession.mode === 'execute' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+                    
+                    const response = await ai.models.generateContent({
+                        model: modelName,
+                        contents: updatedMsgs.map(m => ({
+                            role: m.role === 'assistant' ? 'model' : 'user',
+                            parts: [{ text: m.content }]
+                        })),
+                        config: {
+                            systemInstruction: settings.baseKnowledge,
+                            ...(activeSession.mode === 'execute' && { thinkingConfig: { thinkingBudget: 32768 } })
+                        }
+                    });
+
+                    const aiMsg = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
+                    setMessages(prev => ({ ...prev, [activeSessionId]: [...updatedMsgs, aiMsg] }));
+                } catch (error) {
+                    console.error(error);
+                    const errorMsg = { id: 'err', role: 'assistant', content: 'Error: Failed to fetch response. Check console/API key.' };
+                    setMessages(prev => ({ ...prev, [activeSessionId]: [...updatedMsgs, errorMsg] }));
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const handleContextAction = (action, payload) => {
+                const id = contextMenu.session.id;
+                if (action === 'delete') {
+                    setSessions(sessions.filter(s => s.id !== id));
+                    if (activeSessionId === id) setActiveSessionId(sessions.find(s => s.id !== id)?.id);
+                } else if (action === 'status') {
+                    setSessions(sessions.map(s => s.id === id ? { ...s, status: payload } : s));
+                } else if (action === 'flag') {
+                    setSessions(sessions.map(s => s.id === id ? { ...s, isFlagged: !s.isFlagged } : s));
+                } else if (action === 'label') {
+                    setSessions(sessions.map(s => {
+                        if (s.id !== id) return s;
+                        const labelIds = s.labelIds.includes(payload) ? s.labelIds.filter(lid => lid !== payload) : [...s.labelIds, payload];
+                        return { ...s, labelIds };
+                    }));
+                } else if (action === 'rename') {
+                    const title = prompt('New Title:', contextMenu.session.title);
+                    if (title) setSessions(sessions.map(s => s.id === id ? { ...s, title } : s));
+                }
+                setContextMenu(null);
+            };
+
+            const handleModeToggle = (id) => {
+                setSessions(sessions.map(s => s.id === id ? { ...s, mode: s.mode === 'execute' ? 'explore' : 'execute' } : s));
+            };
+
+            // --- RENDER HELPERS ---
+            const renderChat = () => (
+                <>
+                    {/* Header */}
+                    <header className="h-14 flex items-center justify-between px-6 z-10 bg-[var(--bg-tertiary)] border-b border-[var(--border)]">
+                        <div className="flex items-center gap-2 group cursor-pointer px-2 py-1 rounded hover:bg-[var(--bg-elevated)] transition-colors">
+                            <span className="font-medium text-sm truncate max-w-[200px]">{activeSession?.title}</span>
+                            <ChevronDown className="w-3.5 h-3.5 text-[var(--text-dim)]" />
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 px-2 py-1 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[11px] font-medium text-[var(--text-muted)]">
+                                {React.createElement(STATUS_CONFIG[activeSession?.status]?.icon || Circle, { className: `w-3 h-3 ${STATUS_CONFIG[activeSession?.status]?.color}` })}
+                                <span>{STATUS_CONFIG[activeSession?.status]?.label}</span>
+                            </div>
+                            <button className="p-1.5 hover:bg-[var(--bg-elevated)] rounded transition-colors text-[var(--text-muted)] hover:text-white">
+                                <Settings className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Messages Body */}
+                    <div className="flex-1 overflow-y-auto px-4 py-12 custom-scrollbar">
+                        <div className="max-w-3xl mx-auto space-y-10">
+                            {currentMessages.length === 0 && (
+                                <div className="h-[60vh] flex flex-col items-center justify-center text-center">
+                                    <div className="w-16 h-16 bg-[var(--bg-elevated)] rounded-2xl flex items-center justify-center mb-6 border border-[var(--border)] shadow-xl">
+                                        <Sparkles className="w-8 h-8 text-blue-400" />
+                                    </div>
+                                    <h2 className="text-xl font-semibold mb-2">Ready to assist</h2>
+                                    <p className="text-[var(--text-dim)] text-sm max-w-sm">Type a message to start a conversation. Use **Execute** mode for complex tasks.</p>
+                                </div>
+                            )}
+                            {currentMessages.map(msg => (
+                                <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} gap-4 animate-fade-in`}>
+                                    {msg.role === 'assistant' && (
+                                        <div className="rounded-xl overflow-hidden bg-[#0A0A0A] border border-[#262626] w-full mb-2">
+                                            <div className="flex items-center gap-3 px-4 py-3 bg-[#151515] cursor-pointer hover:bg-[#1A1A1A] transition-colors">
+                                                <Brain className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                                                <span className="text-[13px] font-medium">Finished Thinking</span>
+                                                <div className="flex-1" />
+                                                <ChevronDown className="w-4 h-4 text-[var(--text-dim)]" />
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className={`text-[15px] leading-7 p-3 px-5 rounded-2xl shadow-sm ${
+                                        msg.role === 'user' ? 'bg-[var(--bg-elevated)] text-[var(--text-main)]' : 'text-[var(--text-main)] markdown-body'
+                                    }`}>
+                                        <Markdown>{msg.content}</Markdown>
+                                    </div>
+                                </div>
+                            ))}
+                            {isLoading && (
+                                <div className="flex items-center gap-3 text-[var(--text-dim)] animate-pulse">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span className="text-sm">Generating...</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Input Area */}
+                    <div className="p-6 bg-gradient-to-t from-[var(--bg-tertiary)] via-[var(--bg-tertiary)] to-transparent">
+                        <div className="max-w-3xl mx-auto bg-[#202020] border border-[#333] rounded-2xl shadow-2xl flex flex-col relative overflow-hidden transition-all duration-300">
+                            <div className="flex items-center justify-between px-3 pt-3 pb-1">
+                                <button 
+                                    onClick={() => handleModeToggle(activeSessionId)}
+                                    className="flex items-center gap-2 text-[#A1A1A1] hover:text-[#E5E5E5] text-[12px] font-medium bg-[#2A2A2A] px-3 py-1.5 rounded-lg border border-[#333] transition-colors"
+                                >
+                                    {React.createElement(MODE_CONFIG[activeSession?.mode]?.icon || Compass, { className: "w-3.5 h-3.5" })}
+                                    <span>{MODE_CONFIG[activeSession?.mode]?.label}</span>
+                                    <ChevronDown className="w-3 h-3 opacity-50 ml-1" />
+                                </button>
+                                <div className="flex items-center gap-2">
+                                    {activeSession?.labelIds.map(lid => {
+                                        const l = labels.find(x => x.id === lid);
+                                        return (
+                                            <div key={lid} className="flex items-center gap-2 bg-[#2A2A2A] px-2.5 py-1.5 rounded-lg border border-[#333] text-[11px] text-[#E5E5E5]">
+                                                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: l?.color }} />
+                                                <span>{l?.name}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <textarea 
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                                className="w-full bg-transparent border-0 text-[#E5E5E5] placeholder-[#525252] px-4 py-4 focus:ring-0 focus:outline-none resize-none min-h-[80px] text-[15px]" 
+                                placeholder="Message Gemini..." 
+                            />
+                            <div className="flex items-center justify-between px-3 py-3">
+                                <div className="flex items-center gap-3">
+                                    <Paperclip className="w-5 h-5 text-[#A1A1A1] cursor-pointer hover:text-white" />
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[12px] font-medium text-[var(--text-dim)] uppercase tracking-widest">{activeSession?.mode === 'execute' ? 'gemini-3-pro' : 'gemini-3-flash'}</span>
+                                    <button 
+                                        onClick={handleSend}
+                                        disabled={!chatInput.trim() || isLoading}
+                                        className="w-8 h-8 rounded-full bg-[#8E8E93] flex items-center justify-center text-[#1E1E1E] hover:bg-white transition-all shadow-md active:scale-95 disabled:opacity-50"
+                                    >
+                                        <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            );
+
+            const renderSettings = () => (
+                <div className="flex-1 p-12 overflow-y-auto custom-scrollbar animate-fade-in">
+                    <div className="max-w-2xl mx-auto space-y-12">
+                        <h1 className="text-3xl font-bold">Settings</h1>
+                        
+                        <section className="space-y-6">
+                            <h2 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-widest">General</h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-[var(--text-dim)] mb-2 uppercase">Workspace Name</label>
+                                    <input 
+                                        value={settings.workspaceName}
+                                        onChange={(e) => setSettings({ ...settings, workspaceName: e.target.value })}
+                                        className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-3 text-sm focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-[var(--text-dim)] mb-2 uppercase">Appearance</label>
+                                    <div className="flex gap-3">
+                                        <button 
+                                            onClick={() => setSettings({ ...settings, theme: 'dark' })}
+                                            className={`flex-1 p-3 rounded-lg border border-[var(--border)] text-sm font-medium ${settings.theme === 'dark' ? 'bg-[var(--bg-elevated)] text-white' : 'text-[var(--text-muted)]'}`}
+                                        >Dark</button>
+                                        <button 
+                                            onClick={() => setSettings({ ...settings, theme: 'light' })}
+                                            className={`flex-1 p-3 rounded-lg border border-[var(--border)] text-sm font-medium ${settings.theme === 'light' ? 'bg-[var(--bg-elevated)] text-white' : 'text-[var(--text-muted)]'}`}
+                                        >Light</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="space-y-6">
+                            <h2 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-widest">Base Instructions</h2>
+                            <textarea 
+                                value={settings.baseKnowledge}
+                                onChange={(e) => setSettings({ ...settings, baseKnowledge: e.target.value })}
+                                className="w-full h-32 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-3 text-sm focus:outline-none resize-none"
+                                placeholder="E.g. Be concise and use Markdown..."
+                            />
+                        </section>
+                    </div>
+                </div>
+            );
+
+            const renderAgents = () => (
+                <div className="flex-1 p-12 overflow-y-auto custom-scrollbar animate-fade-in">
+                    <div className="max-w-2xl mx-auto space-y-12">
+                        <div className="flex items-center justify-between">
+                            <h1 className="text-3xl font-bold">Agents</h1>
+                            <button className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                <Plus className="w-4 h-4" />
+                                <span>New Agent</span>
+                            </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-4">
+                            {agents.length === 0 && (
+                                <div className="text-center py-20 border border-dashed border-[var(--border)] rounded-2xl">
+                                    <Bot className="w-12 h-12 text-[var(--text-dim)] mx-auto mb-4" />
+                                    <p className="text-[var(--text-dim)]">No custom agents yet.</p>
+                                </div>
+                            )}
+                            {agents.map(a => (
+                                <div key={a.id} className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-lg bg-[var(--bg-elevated)] flex items-center justify-center">
+                                            <Bot className="w-6 h-6 text-blue-400" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold">{a.name}</h3>
+                                            <p className="text-xs text-[var(--text-dim)] truncate max-w-sm">{a.instruction}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setAgents(agents.filter(x => x.id !== a.id))} className="p-2 hover:bg-red-500/10 text-red-500 rounded transition-colors">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="flex h-screen w-full bg-[var(--bg-primary)] overflow-hidden text-sm select-none">
+                    
+                    {/* 1. Sidebar */}
+                    <aside className="w-[260px] bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col flex-shrink-0">
+                        <header className="h-14 flex items-center px-4 justify-between">
+                            <span className="font-semibold text-[var(--text-main)] text-base tracking-tight cursor-pointer" onClick={() => setCurrentView('chat')}>Shuper</span>
+                            <div className="flex gap-1 text-[var(--text-dim)]">
+                                <ChevronLeft className="w-4 h-4 cursor-pointer hover:text-white" />
+                                <ChevronRight className="w-4 h-4 cursor-pointer hover:text-white" />
+                            </div>
+                        </header>
+                        
+                        <div className="px-3 pb-4 flex-1">
+                            <button 
+                                onClick={handleNewSession}
+                                className="flex items-center gap-2 w-full px-3 py-2 rounded-md bg-[var(--bg-tertiary)] border border-[var(--border)] hover:border-[var(--text-dim)] text-[var(--text-main)] transition-all mb-4 shadow-sm"
+                            >
+                                <SquarePen className="w-4 h-4" />
+                                <span className="font-medium">New Session</span>
+                            </button>
+                            
+                            <nav className="space-y-1">
+                                <div onClick={() => { setFilter('all'); setCurrentView('chat'); }} className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer ${currentView === 'chat' && filter === 'all' ? 'bg-[var(--bg-elevated)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}><Inbox className="w-4 h-4" /><span>All Sessions</span></div>
+                                <div onClick={() => { setFilter('flagged'); setCurrentView('chat'); }} className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer ${currentView === 'chat' && filter === 'flagged' ? 'bg-[var(--bg-elevated)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}><Flag className="w-4 h-4" /><span>Flagged</span></div>
+                                <div className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[var(--bg-elevated)] text-[var(--text-muted)]"><Tag className="w-4 h-4" /><span>Labels</span></div>
+                                <div onClick={() => { setFilter('archived'); setCurrentView('chat'); }} className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer ${currentView === 'chat' && filter === 'archived' ? 'bg-[var(--bg-elevated)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}><Archive className="w-4 h-4" /><span>Archived</span></div>
+                            </nav>
+                            
+                            <div className="my-4 h-[1px] bg-[var(--border)]" />
+                            
+                            <nav className="space-y-1">
+                                <div onClick={() => setCurrentView('agents')} className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer ${currentView === 'agents' ? 'bg-[var(--bg-elevated)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}><Cpu className="w-4 h-4" /><span>Agents</span></div>
+                                <div onClick={() => setCurrentView('settings')} className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer ${currentView === 'settings' ? 'bg-[var(--bg-elevated)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}><Settings className="w-4 h-4" /><span>Settings</span></div>
+                            </nav>
+                        </div>
+
+                        <footer className="mt-auto px-3 pb-4">
+                            <div className="flex items-center justify-between px-2 py-2 text-[var(--text-muted)] hover:text-white cursor-pointer rounded-md hover:bg-[var(--bg-elevated)] transition-colors">
+                                <div className="flex items-center gap-2 max-w-[180px]">
+                                    <div className="w-5 h-5 bg-blue-500 rounded-full text-white flex items-center justify-center text-[10px] font-bold uppercase">
+                                        {settings.userName.charAt(0)}
+                                    </div>
+                                    <span className="truncate">{settings.workspaceName}</span>
+                                </div>
+                                <HelpCircle className="w-4 h-4" />
+                            </div>
+                        </footer>
+                    </aside>
+
+                    {/* 2. Session List */}
+                    <section className="w-[300px] bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col flex-shrink-0">
+                        <div className="h-14 flex items-center px-4 justify-between border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+                            <span className="font-medium text-[var(--text-main)] capitalize">{filter} Sessions</span>
+                            <Search className="w-4 h-4 text-[var(--text-dim)] hover:text-white cursor-pointer" />
+                        </div>
+                        <div className="flex-1 px-2 py-4 overflow-y-auto custom-scrollbar space-y-1">
+                            <div className="px-2 mb-2 text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest">Recent</div>
+                            {filteredSessions.map(s => (
+                                <div 
+                                    key={s.id} 
+                                    onClick={() => setActiveSessionId(s.id)} 
+                                    onContextMenu={(e) => {
+                                        e.preventDefault();
+                                        setContextMenu({ x: e.clientX, y: e.clientY, session: s });
+                                    }}
+                                    className={`group flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-all border border-transparent ${
+                                        s.id === activeSessionId ? 'bg-[var(--bg-elevated)] border-[var(--border)] shadow-sm' : 'hover:bg-[var(--bg-tertiary)]'
+                                    }`}
+                                >
+                                    <div className="mt-1">
+                                        {React.createElement(STATUS_CONFIG[s.status]?.icon || Circle, { className: `w-3.5 h-3.5 ${STATUS_CONFIG[s.status]?.color || 'text-gray-400'}` })}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-0.5">
+                                            <span className={`font-medium truncate text-[var(--text-main)] text-sm ${s.status === 'done' ? 'line-through text-[var(--text-dim)]' : ''}`}>{s.title}</span>
+                                            <span className="text-[10px] text-[var(--text-dim)] font-medium flex-shrink-0 ml-2">{s.time}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] bg-[var(--bg-tertiary)] text-[var(--text-muted)] px-1.5 py-0.5 rounded border border-[var(--border)] group-hover:border-[var(--text-dim)] transition-colors capitalize">{s.mode}</span>
+                                            <div className="flex -space-x-1">
+                                                {s.labelIds.map(lid => (
+                                                    <div key={lid} className="w-1.5 h-1.5 rounded-full ring-2 ring-[var(--bg-secondary)]" style={{ backgroundColor: labels.find(x => x.id === lid)?.color }} />
+                                                ))}
+                                            </div>
+                                            {s.isFlagged && <Flag className="w-3 h-3 text-red-400 fill-red-400" />}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* 3. Main Interface */}
+                    <main className="flex-1 flex flex-col bg-[var(--bg-tertiary)] relative overflow-hidden">
+                        {currentView === 'chat' && renderChat()}
+                        {currentView === 'settings' && renderSettings()}
+                        {currentView === 'agents' && renderAgents()}
+
+                        {contextMenu && (
+                            <ContextMenu 
+                                {...contextMenu} 
+                                labels={labels}
+                                onClose={() => setContextMenu(null)} 
+                                onAction={handleContextAction} 
+                            />
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
