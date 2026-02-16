@@ -129,7 +129,7 @@ function useStickyState<T>(defaultValue: T, key: string, debounceMs: number = 0)
   return [value, setValue];
 }
 
-const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) => void }> = ({ onComplete }) => {
+const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) => void, onStartExit: () => void }> = ({ onComplete, onStartExit }) => {
     const [name, setName] = useState('');
     const [workspace, setWorkspace] = useState('');
     const [isExiting, setIsExiting] = useState(false);
@@ -137,9 +137,10 @@ const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) 
     const handleComplete = () => {
         if (name && workspace) {
             setIsExiting(true);
+            onStartExit();
             setTimeout(() => {
                 onComplete(name, workspace);
-            }, 800);
+            }, 1200);
         }
     };
 
@@ -265,6 +266,7 @@ const App: React.FC = () => {
   
   const [logoClicks, setLogoClicks] = useState(0);
   const [isLogoGlowing, setIsLogoGlowing] = useState(false);
+  const [isLanding, setIsLanding] = useState(false);
 
   const [settings, setSettings] = useStickyState<UserSettings>(DEFAULT_SETTINGS, 'shuper_settings');
   const [availableLabels, setAvailableLabels] = useStickyState<Label[]>(DEFAULT_LABELS, 'shuper_labels');
@@ -872,194 +874,199 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-full bg-[var(--bg-primary)] overflow-hidden text-sm font-inter text-[var(--text-main)] relative">
       {!settings.onboardingComplete && !isTourActive && (
-          <OnboardingModal onComplete={(name, workspace) => {
+          <OnboardingModal 
+            onStartExit={() => setIsLanding(true)}
+            onComplete={(name, workspace) => {
               setSettings({ ...settings, userName: name, workspaceName: workspace });
               setIsTourActive(true);
-          }} />
-      )}
-
-      {isTourActive && (
-          <TourOverlay 
-            onComplete={() => {
-                setSettings({ ...settings, onboardingComplete: true });
-                setIsTourActive(false);
             }} 
-            onSkip={() => {
-                setSettings({ ...settings, onboardingComplete: true });
-                setIsTourActive(false);
-            }}
-            onNewSession={() => {
-                if (sessions.length === 0) handleNewSession();
-                navigateTo('chat');
-            }}
           />
       )}
 
-      {deleteConfirmation && (
-          <DeleteConfirmationModal 
-              title={deleteConfirmation.title}
-              description={deleteConfirmation.type === 'chat' ? 'this chat' : 'this agent'}
-              onConfirm={handleConfirmDelete}
-              onCancel={() => setDeleteConfirmation(null)}
-          />
-      )}
+      <div className={`flex w-full h-full ${isLanding ? 'animate-workspace-enter' : ''}`}>
+        {isTourActive && (
+            <TourOverlay 
+                onComplete={() => {
+                    setSettings({ ...settings, onboardingComplete: true });
+                    setIsTourActive(false);
+                }} 
+                onSkip={() => {
+                    setSettings({ ...settings, onboardingComplete: true });
+                    setIsTourActive(false);
+                }}
+                onNewSession={() => {
+                    if (sessions.length === 0) handleNewSession();
+                    navigateTo('chat');
+                }}
+            />
+        )}
 
-      {isMobileSidebarOpen && (
-          <div className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-in fade-in duration-300" onClick={() => setIsMobileSidebarOpen(false)} />
-      )}
+        {deleteConfirmation && (
+            <DeleteConfirmationModal 
+                title={deleteConfirmation.title}
+                description={deleteConfirmation.type === 'chat' ? 'this chat' : 'this agent'}
+                onConfirm={handleConfirmDelete}
+                onCancel={() => setDeleteConfirmation(null)}
+            />
+        )}
 
-      <div className={`
-          fixed md:relative inset-y-0 left-0 z-50 
-          transform transition-all duration-500 ease-in-out 
-          ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-          ${isSidebarVisible ? 'md:translate-x-0 md:w-[260px] md:opacity-100 md:visible' : 'md:-translate-x-full md:w-0 md:opacity-0 md:invisible'}
-          overflow-hidden h-full bg-[var(--bg-primary)]
-      `}>
-          <SidebarNavigation 
-            currentFilter={currentFilter} 
-            onSetFilter={(f) => {
-                setCurrentFilter(f);
-                setIsMobileSidebarOpen(false);
-                setIsMobileSessionListOpen(true);
-            }} 
-            onNewSession={() => {
-                handleNewSession();
-                setIsMobileSidebarOpen(false);
-            }}
-            onBack={handleBack}
-            onForward={handleForward}
-            canBack={historyIndex > 0}
-            canForward={historyIndex < history.length - 1}
-            statusCounts={statusCounts}
-            availableLabels={availableLabels}
-            currentView={currentView}
-            onChangeView={(v) => {
-                navigateTo(v);
-                setIsMobileSidebarOpen(false);
-            }}
-            workspaceName={settings.workspaceName}
-            workspaceIcon={settings.workspaceIcon}
-            onShowWhatsNew={() => setIsWhatsNewOpen(true)}
-            onCloseMobile={() => setIsMobileSidebarOpen(false)}
-            onLogoClick={handleLogoClick}
-            isLogoGlowing={isLogoGlowing}
-          />
-      </div>
+        {isMobileSidebarOpen && (
+            <div className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-in fade-in duration-300" onClick={() => setIsMobileSidebarOpen(false)} />
+        )}
 
-      {isWhatsNewOpen && <WhatsNewModal isOpen={isWhatsNewOpen} onClose={() => setIsWhatsNewOpen(false)} />}
+        <div className={`
+            fixed md:relative inset-y-0 left-0 z-50 
+            transform transition-all duration-500 ease-in-out 
+            ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+            ${isSidebarVisible ? 'md:translate-x-0 md:w-[260px] md:opacity-100 md:visible' : 'md:-translate-x-full md:w-0 md:opacity-0 md:invisible'}
+            overflow-hidden h-full bg-[var(--bg-primary)]
+        `}>
+            <SidebarNavigation 
+                currentFilter={currentFilter} 
+                onSetFilter={(f) => {
+                    setCurrentFilter(f);
+                    setIsMobileSidebarOpen(false);
+                    setIsMobileSessionListOpen(true);
+                }} 
+                onNewSession={() => {
+                    handleNewSession();
+                    setIsMobileSidebarOpen(false);
+                }}
+                onBack={handleBack}
+                onForward={handleForward}
+                canBack={historyIndex > 0}
+                canForward={historyIndex < history.length - 1}
+                statusCounts={statusCounts}
+                availableLabels={availableLabels}
+                currentView={currentView}
+                onChangeView={(v) => {
+                    navigateTo(v);
+                    setIsMobileSidebarOpen(false);
+                }}
+                workspaceName={settings.workspaceName}
+                workspaceIcon={settings.workspaceIcon}
+                onShowWhatsNew={() => setIsWhatsNewOpen(true)}
+                onCloseMobile={() => setIsMobileSidebarOpen(false)}
+                onLogoClick={handleLogoClick}
+                isLogoGlowing={isLogoGlowing}
+            />
+        </div>
 
-      <div className="flex-1 flex overflow-hidden relative p-0 md:p-6 md:pl-0 md:gap-4 transition-all duration-500">
-          {currentView === 'chat' && (
-              <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 gap-0 md:gap-4 overflow-hidden h-full">
-                <div className={`
-                    w-full md:w-[300px] flex-shrink-0 
-                    transition-all duration-500 ease-in-out
-                    ${isMobileSessionListOpen ? 'block' : 'hidden'} 
-                    ${isSubSidebarVisible ? 'md:translate-x-0 md:w-[300px] md:opacity-100 md:visible' : 'md:-translate-x-full md:w-0 md:opacity-0 md:invisible'}
-                    md:block rounded-none md:rounded-2xl overflow-hidden island-card h-full
-                `}>
-                    <SessionList 
-                        sessions={filteredSessions} 
-                        activeSessionId={activeSessionId || ''} 
-                        onSelectSession={handleSelectSession}
-                        onUpdateSessionStatus={updateSessionStatus} 
-                        onDeleteSession={deleteSession}
-                        onRenameSession={renameSession}
-                        onRegenerateTitle={handleRegenerateTitle}
-                        availableLabels={availableLabels}
-                        onToggleLabel={updateSessionLabels}
-                        onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])}
-                        sessionLoading={sessionLoading}
-                        onNewSession={handleNewSession}
-                        onToggleFlag={toggleSessionFlag}
-                        currentFilter={currentFilter}
-                        onOpenSidebar={() => setIsMobileSidebarOpen(true)}
-                        triggerSearch={triggerSearch}
-                        onEditTitle={(val) => setIsEditingTitle(val)}
+        {isWhatsNewOpen && <WhatsNewModal isOpen={isWhatsNewOpen} onClose={() => setIsWhatsNewOpen(false)} />}
+
+        <div className="flex-1 flex overflow-hidden relative p-0 md:p-6 md:pl-0 md:gap-4 transition-all duration-500">
+            {currentView === 'chat' && (
+                <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 gap-0 md:gap-4 overflow-hidden h-full">
+                    <div className={`
+                        w-full md:w-[300px] flex-shrink-0 
+                        transition-all duration-500 ease-in-out
+                        ${isMobileSessionListOpen ? 'block' : 'hidden'} 
+                        ${isSubSidebarVisible ? 'md:translate-x-0 md:w-[300px] md:opacity-100 md:visible' : 'md:-translate-x-full md:w-0 md:opacity-0 md:invisible'}
+                        md:block rounded-none md:rounded-2xl overflow-hidden island-card h-full
+                    `}>
+                        <SessionList 
+                            sessions={filteredSessions} 
+                            activeSessionId={activeSessionId || ''} 
+                            onSelectSession={handleSelectSession}
+                            onUpdateSessionStatus={updateSessionStatus} 
+                            onDeleteSession={deleteSession}
+                            onRenameSession={renameSession}
+                            onRegenerateTitle={handleRegenerateTitle}
+                            availableLabels={availableLabels}
+                            onToggleLabel={updateSessionLabels}
+                            onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])}
+                            sessionLoading={sessionLoading}
+                            onNewSession={handleNewSession}
+                            onToggleFlag={toggleSessionFlag}
+                            currentFilter={currentFilter}
+                            onOpenSidebar={() => setIsMobileSidebarOpen(true)}
+                            triggerSearch={triggerSearch}
+                            onEditTitle={(val) => setIsEditingTitle(val)}
+                        />
+                    </div>
+                    
+                    <div className={`flex-1 transition-all duration-300 h-full ${!isMobileSessionListOpen || !activeSessionId ? 'block' : 'hidden md:block'} rounded-none md:rounded-2xl overflow-hidden island-card h-full`}>
+                        {activeSession ? (
+                            <ChatInterface 
+                                key={activeSession.id}
+                                session={activeSession}
+                                messages={activeMessages} 
+                                onSendMessage={handleSendMessage}
+                                onStopGeneration={() => handleStopGeneration(activeSessionId!)}
+                                isLoading={activeLoading}
+                                onUpdateStatus={(status) => updateSessionStatus(activeSessionId!, status)}
+                                onUpdateMode={(mode) => updateSessionMode(activeSessionId!, mode)}
+                                availableLabels={availableLabels}
+                                onUpdateLabels={(labelId) => updateSessionLabels(activeSessionId!, labelId)}
+                                onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])}
+                                onDeleteSession={() => deleteSession(activeSessionId!)}
+                                onRenameSession={(title) => renameSession(activeSessionId!, title)}
+                                onRegenerateTitle={handleRegenerateTitle}
+                                onToggleFlag={() => toggleSessionFlag(activeSessionId!)}
+                                onChangeView={(v) => navigateTo(v)}
+                                onNewSession={handleNewSession}
+                                visibleModels={settings.visibleModels}
+                                agents={agents}
+                                currentModel={activeSessionId ? (sessionModels[activeSessionId] || '') : ''}
+                                onSelectModel={(m) => {
+                                    if(activeSessionId) setSessionModels(prev => ({...prev, [activeSessionId]: m}));
+                                }}
+                                onUpdateCouncilModels={(models) => updateCouncilModels(activeSessionId!, models)}
+                                sendKey={settings.sendKey}
+                                hasOpenRouterKey={!!(settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt)}
+                                hasDeepSeekKey={!!settings.apiKeys.deepSeek}
+                                hasMoonshotKey={!!settings.apiKeys.moonshot}
+                                onBackToList={() => setIsMobileSessionListOpen(true)}
+                                onOpenSidebar={() => setIsMobileSidebarOpen(true)}
+                                hasAnyKey={hasAnyKey}
+                                userSettings={settings}
+                                draftValue={activeSessionId ? (sessionDrafts[activeSessionId] || '') : ''}
+                                onDraftChange={(val) => {
+                                    if(activeSessionId) setSessionDrafts(prev => ({...prev, [activeSessionId]: val}));
+                                }}
+                                isEditingTitle={isEditingTitle}
+                                setIsEditingTitle={setIsEditingTitle}
+                            />
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center text-[var(--text-dim)] bg-[var(--bg-tertiary)] flex-col gap-2 h-full">
+                                <div className="md:hidden absolute top-4 left-4">
+                                    <button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 bg-[var(--bg-elevated)] rounded-lg text-[var(--text-main)]">
+                                        <Menu className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                <div className="w-16 h-16 rounded-2xl bg-[var(--bg-elevated)] flex items-center justify-center mb-4 shadow-lg">
+                                    <Loader2 className="w-6 h-6 text-[var(--accent)] animate-spin" strokeWidth={2} />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {currentView === 'settings' && (
+                <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 rounded-none md:rounded-2xl overflow-hidden island-card h-full">
+                    <SettingsView 
+                        settings={settings} 
+                        onUpdateSettings={handleUpdateSettings}
+                        labels={availableLabels}
+                        onUpdateLabels={setAvailableLabels}
+                        onClearData={handleClearData}
+                        onRepairWorkspace={handleRepairWorkspace}
                     />
                 </div>
-                
-                <div className={`flex-1 transition-all duration-300 h-full ${!isMobileSessionListOpen || !activeSessionId ? 'block' : 'hidden md:block'} rounded-none md:rounded-2xl overflow-hidden island-card h-full`}>
-                    {activeSession ? (
-                        <ChatInterface 
-                            key={activeSession.id}
-                            session={activeSession}
-                            messages={activeMessages} 
-                            onSendMessage={handleSendMessage}
-                            onStopGeneration={() => handleStopGeneration(activeSessionId!)}
-                            isLoading={activeLoading}
-                            onUpdateStatus={(status) => updateSessionStatus(activeSessionId!, status)}
-                            onUpdateMode={(mode) => updateSessionMode(activeSessionId!, mode)}
-                            availableLabels={availableLabels}
-                            onUpdateLabels={(labelId) => updateSessionLabels(activeSessionId!, labelId)}
-                            onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])}
-                            onDeleteSession={() => deleteSession(activeSessionId!)}
-                            onRenameSession={(title) => renameSession(activeSessionId!, title)}
-                            onRegenerateTitle={handleRegenerateTitle}
-                            onToggleFlag={() => toggleSessionFlag(activeSessionId!)}
-                            onChangeView={(v) => navigateTo(v)}
-                            onNewSession={handleNewSession}
-                            visibleModels={settings.visibleModels}
-                            agents={agents}
-                            currentModel={activeSessionId ? (sessionModels[activeSessionId] || '') : ''}
-                            onSelectModel={(m) => {
-                                if(activeSessionId) setSessionModels(prev => ({...prev, [activeSessionId]: m}));
-                            }}
-                            onUpdateCouncilModels={(models) => updateCouncilModels(activeSessionId!, models)}
-                            sendKey={settings.sendKey}
-                            hasOpenRouterKey={!!(settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt)}
-                            hasDeepSeekKey={!!settings.apiKeys.deepSeek}
-                            hasMoonshotKey={!!settings.apiKeys.moonshot}
-                            onBackToList={() => setIsMobileSessionListOpen(true)}
-                            onOpenSidebar={() => setIsMobileSidebarOpen(true)}
-                            hasAnyKey={hasAnyKey}
-                            userSettings={settings}
-                            draftValue={activeSessionId ? (sessionDrafts[activeSessionId] || '') : ''}
-                            onDraftChange={(val) => {
-                                if(activeSessionId) setSessionDrafts(prev => ({...prev, [activeSessionId]: val}));
-                            }}
-                            isEditingTitle={isEditingTitle}
-                            setIsEditingTitle={setIsEditingTitle}
-                        />
-                    ) : (
-                        <div className="flex-1 flex items-center justify-center text-[var(--text-dim)] bg-[var(--bg-tertiary)] flex-col gap-2 h-full">
-                            <div className="md:hidden absolute top-4 left-4">
-                                <button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 bg-[var(--bg-elevated)] rounded-lg text-[var(--text-main)]">
-                                    <Menu className="w-5 h-5" />
-                                </button>
-                            </div>
-                            <div className="w-16 h-16 rounded-2xl bg-[var(--bg-elevated)] flex items-center justify-center mb-4 shadow-lg">
-                                <Loader2 className="w-6 h-6 text-[var(--accent)] animate-spin" strokeWidth={2} />
-                            </div>
-                        </div>
-                    )}
+            )}
+
+            {currentView === 'agents' && (
+                <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 rounded-none md:rounded-2xl overflow-hidden island-card h-full">
+                    <AgentsView 
+                        agents={agents}
+                        onCreateAgent={(a) => setAgents(prev => [...prev, a])}
+                        onDeleteAgent={deleteAgent}
+                        onUpdateAgent={handleUpdateAgent}
+                    />
                 </div>
-              </div>
-          )}
-
-          {currentView === 'settings' && (
-              <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 rounded-none md:rounded-2xl overflow-hidden island-card h-full">
-                  <SettingsView 
-                    settings={settings} 
-                    onUpdateSettings={handleUpdateSettings}
-                    labels={availableLabels}
-                    onUpdateLabels={setAvailableLabels}
-                    onClearData={handleClearData}
-                    onRepairWorkspace={handleRepairWorkspace}
-                  />
-              </div>
-          )}
-
-          {currentView === 'agents' && (
-              <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 rounded-none md:rounded-2xl overflow-hidden island-card h-full">
-                  <AgentsView 
-                    agents={agents}
-                    onCreateAgent={(a) => setAgents(prev => [...prev, a])}
-                    onDeleteAgent={deleteAgent}
-                    onUpdateAgent={handleUpdateAgent}
-                  />
-              </div>
-          )}
+            )}
+        </div>
       </div>
     </div>
   );
