@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { Attachment, OPENROUTER_FREE_MODELS, SessionMode, UserSettings, Label } from "../types";
+import { Attachment, OPENROUTER_FREE_MODELS, SessionMode, UserSettings, Label, ROUTEWAY_MODELS } from "../types";
 
 /**
  * Generates a concise title for a session using the Gemini API.
@@ -98,20 +99,22 @@ export const sendMessageToGemini = async (
 ): Promise<{ text: string; thoughtProcess?: string }> => {
   
   const trimmedModel = modelName.trim();
-  const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || trimmedModel.includes(':free');
-  const isDeepSeek = trimmedModel.startsWith('deepseek-');
-  const isMoonshot = trimmedModel.startsWith('moonshot-');
+  const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || trimmedModel.includes(':free') && !ROUTEWAY_MODELS.includes(trimmedModel);
+  const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
 
   let actualModel = trimmedModel;
-  if (mode === 'execute' && !isOpenRouter && !isDeepSeek && !isMoonshot) {
+  if (mode === 'execute' && !isOpenRouter && !isRouteway) {
       actualModel = 'gemini-3-pro-preview';
   }
 
-  if (isOpenRouter || isDeepSeek || isMoonshot) {
+  // Prepend "You are running in Shuper" to ensure model self-awareness
+  const updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
+
+  if (isOpenRouter || isRouteway) {
       return sendMessageToOpenAICompatible(
           message, 
           history, 
-          systemInstruction, 
+          updatedSystemInstruction, 
           useThinking, 
           onUpdate, 
           apiKeys, 
@@ -141,10 +144,8 @@ export const sendMessageToGemini = async (
 
     if (currentParts.length === 0) currentParts.push({ text: " " });
 
-    let finalSystemInstruction = systemInstruction || "";
-
     const config: any = {
-        systemInstruction: finalSystemInstruction.trim() || undefined,
+        systemInstruction: updatedSystemInstruction.trim() || undefined,
     };
 
     const isThinkingSupported = actualModel.includes('gemini-3') || actualModel.includes('gemini-2.5');
@@ -198,12 +199,9 @@ const sendMessageToOpenAICompatible = async (
 
     let fullUrl = '';
     const trimmedModel = modelName.trim();
-    const isOpenRouter = trimmedModel.includes(':free') || OPENROUTER_FREE_MODELS.includes(trimmedModel);
     
-    if (trimmedModel.startsWith('deepseek-')) {
-        fullUrl = 'https://api.deepseek.com/chat/completions';
-    } else if (trimmedModel.startsWith('moonshot-')) {
-        fullUrl = 'https://api.moonshot.cn/v1/chat/completions';
+    if (ROUTEWAY_MODELS.includes(trimmedModel)) {
+        fullUrl = 'https://api.routeway.ai/v1/chat/completions';
     } else {
         fullUrl = 'https://openrouter.ai/api/v1/chat/completions';
     }
@@ -241,19 +239,18 @@ const sendMessageToOpenAICompatible = async (
 
     try {
         let keyToTry = '';
-        if (trimmedModel.startsWith('deepseek-')) keyToTry = apiKeys.deepSeek;
-        else if (trimmedModel.startsWith('moonshot-')) keyToTry = apiKeys.moonshot;
+        if (ROUTEWAY_MODELS.includes(trimmedModel)) keyToTry = apiKeys.routeway;
         else keyToTry = apiKeys.openRouter;
 
-        if (!keyToTry && isOpenRouter && apiKeys.openRouterAlt) {
-            keyToTry = apiKeys.openRouterAlt; // Use alt if primary missing
+        if (!keyToTry && !ROUTEWAY_MODELS.includes(trimmedModel) && apiKeys.openRouterAlt) {
+            keyToTry = apiKeys.openRouterAlt; // Use alt if primary missing for OpenRouter
         }
 
         if (!keyToTry) throw new Error(`API Key for ${modelName} missing.`);
 
         let response = await tryFetch(keyToTry);
 
-        if (response.status === 429 && !trimmedModel.startsWith('deepseek-') && !trimmedModel.startsWith('moonshot-') && apiKeys.openRouterAlt && keyToTry !== apiKeys.openRouterAlt) {
+        if (response.status === 429 && !ROUTEWAY_MODELS.includes(trimmedModel) && apiKeys.openRouterAlt && keyToTry !== apiKeys.openRouterAlt) {
             console.log("Primary OpenRouter key quota hit, switching to alternative key...");
             response = await tryFetch(apiKeys.openRouterAlt);
         }
