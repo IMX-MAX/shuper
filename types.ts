@@ -107,13 +107,17 @@ export const GEMINI_MODELS = [
 ];
 
 export const ROUTEWAY_MODELS = [
-    'deepseek-r1:free',
-    'kimi-k2-0905:free',
     'devstral-2512:free',
-    'minimax-m2:free',
+    'kimi-k2-0905:free',
+    'nemotron-nano-9b-v2:free',
+    'gpt-oss-120b:free',
     'glm-4.5-air:free',
+    'deepseek-r1-0528:free',
+    'deepseek-r1:free',
+    'deepseek-r1-distill-qwen-32b:free',
     'llama-3.2-3b-instruct:free',
-    'gpt-oss-120b:free'
+    'llama-3.1-8b-instruct:free',
+    'mistral-nemo-instruct:free'
 ];
 
 export const MODEL_FRIENDLY_NAMES: Record<string, string> = {
@@ -135,11 +139,15 @@ export const MODEL_FRIENDLY_NAMES: Record<string, string> = {
     'mistralai/mistral-small-3.1-24b-instruct:free': 'Mistral Small 3.1',
     
     // Routeway
-    'deepseek-r1:free': 'DeepSeek R1',
+    'devstral-2512:free': 'Devstral 2512',
     'kimi-k2-0905:free': 'Kimi K2',
-    'devstral-2512:free': 'Devstral',
-    'minimax-m2:free': 'Minimax M2',
+    'nemotron-nano-9b-v2:free': 'Nemotron Nano 9B',
+    'gpt-oss-120b:free': 'GPT OSS 120B',
     'glm-4.5-air:free': 'GLM 4.5 Air',
+    'deepseek-r1-0528:free': 'DeepSeek R1 (0528)',
+    'deepseek-r1:free': 'DeepSeek R1',
+    'deepseek-r1-distill-qwen-32b:free': 'DeepSeek R1 Distill',
     'llama-3.2-3b-instruct:free': 'Llama 3.2 3B',
-    'gpt-oss-120b:free': 'GPT OSS 120B'
+    'llama-3.1-8b-instruct:free': 'Llama 3.1 8B',
+    'mistral-nemo-instruct:free': 'Mistral Nemo'
 };
