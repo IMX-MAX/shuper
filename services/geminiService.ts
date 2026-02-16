@@ -99,12 +99,19 @@ export const sendMessageToGemini = async (
 ): Promise<{ text: string; thoughtProcess?: string }> => {
   
   const trimmedModel = modelName.trim();
-  const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || trimmedModel.includes(':free') && !ROUTEWAY_MODELS.includes(trimmedModel);
+  
+  // Check if model is in the Routeway list.
   const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
 
-  let actualModel = trimmedModel;
-  if (mode === 'execute' && !isOpenRouter && !isRouteway) {
-      actualModel = 'gemini-3-pro-preview';
+  // Use the model ID exactly as is (including :free) to ensure correct API routing
+  const actualModel = trimmedModel;
+
+  const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || (trimmedModel.includes(':free') && !isRouteway);
+
+  // Fallback to Pro for execute mode if not using external provider
+  let finalModel = actualModel;
+  if (mode === 'execute' && !isOpenRouter && !isRouteway && !actualModel.includes('gemini-3-pro')) {
+      finalModel = 'gemini-3-pro-preview';
   }
 
   // Prepend "You are running in Shuper" to ensure model self-awareness
@@ -118,7 +125,7 @@ export const sendMessageToGemini = async (
           useThinking, 
           onUpdate, 
           apiKeys, 
-          actualModel,
+          finalModel,
           signal
       );
   }
@@ -148,7 +155,7 @@ export const sendMessageToGemini = async (
         systemInstruction: updatedSystemInstruction.trim() || undefined,
     };
 
-    const isThinkingSupported = actualModel.includes('gemini-3') || actualModel.includes('gemini-2.5');
+    const isThinkingSupported = finalModel.includes('gemini-3') || finalModel.includes('gemini-2.5');
 
     if (isThinkingSupported) {
         if (mode === 'execute') {
@@ -160,7 +167,7 @@ export const sendMessageToGemini = async (
     }
 
     const responseStream = await ai.models.generateContentStream({
-      model: actualModel,
+      model: finalModel,
       contents: [...history, { role: 'user', parts: currentParts }],
       config: config,
       signal
@@ -197,10 +204,13 @@ const sendMessageToOpenAICompatible = async (
     
     if (!apiKeys) return { text: `API configuration missing. Please check Settings.` };
 
-    let fullUrl = '';
     const trimmedModel = modelName.trim();
+    // Logic to detect provider.
+    const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
+
+    let fullUrl = '';
     
-    if (ROUTEWAY_MODELS.includes(trimmedModel)) {
+    if (isRouteway) {
         fullUrl = 'https://api.routeway.ai/v1/chat/completions';
     } else {
         fullUrl = 'https://openrouter.ai/api/v1/chat/completions';
@@ -239,18 +249,18 @@ const sendMessageToOpenAICompatible = async (
 
     try {
         let keyToTry = '';
-        if (ROUTEWAY_MODELS.includes(trimmedModel)) keyToTry = apiKeys.routeway;
+        if (isRouteway) keyToTry = apiKeys.routeway;
         else keyToTry = apiKeys.openRouter;
 
-        if (!keyToTry && !ROUTEWAY_MODELS.includes(trimmedModel) && apiKeys.openRouterAlt) {
+        if (!keyToTry && !isRouteway && apiKeys.openRouterAlt) {
             keyToTry = apiKeys.openRouterAlt; // Use alt if primary missing for OpenRouter
         }
 
-        if (!keyToTry) throw new Error(`API Key for ${modelName} missing.`);
+        if (!keyToTry) throw new Error(`API Key for ${isRouteway ? 'Routeway' : 'OpenRouter'} missing.`);
 
         let response = await tryFetch(keyToTry);
 
-        if (response.status === 429 && !ROUTEWAY_MODELS.includes(trimmedModel) && apiKeys.openRouterAlt && keyToTry !== apiKeys.openRouterAlt) {
+        if (response.status === 429 && !isRouteway && apiKeys.openRouterAlt && keyToTry !== apiKeys.openRouterAlt) {
             console.log("Primary OpenRouter key quota hit, switching to alternative key...");
             response = await tryFetch(apiKeys.openRouterAlt);
         }
