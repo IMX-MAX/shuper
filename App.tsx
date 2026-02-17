@@ -21,7 +21,7 @@ import {
     ROUTEWAY_MODELS,
     SessionMode
 } from './types';
-import { sendMessageToGemini, generateSessionTitle } from './services/geminiService';
+import { sendMessageToGemini, generateSessionTitle, searchScira, searchExa, searchTavily } from './services/geminiService';
 
 const DEFAULT_LABELS: Label[] = [
     { id: '1', name: 'Design', color: '#A1A1A1' },
@@ -50,7 +50,10 @@ const DEFAULT_SETTINGS: UserSettings = {
         gemini: '',
         openRouter: '',
         openRouterAlt: '',
-        routeway: ''
+        routeway: '',
+        scira: '',
+        exa: '',
+        tavily: ''
     }
 };
 
@@ -306,7 +309,7 @@ export const App: React.FC = () => {
   }, []);
 
   const hasAnyKey = useMemo(() => {
-    return !!(process.env.API_KEY || settings.apiKeys.gemini || settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt || settings.apiKeys.routeway);
+    return !!(process.env.API_KEY || settings.apiKeys.gemini || settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt || settings.apiKeys.routeway || settings.apiKeys.scira || settings.apiKeys.exa || settings.apiKeys.tavily);
   }, [settings.apiKeys]);
 
   const createSessionObject = (): Session => ({
@@ -593,7 +596,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleSendMessage = async (text: string, attachments: Attachment[], useThinking: boolean, mode: SessionMode, existingMsgId?: string) => {
+  const handleSendMessage = async (text: string, attachments: Attachment[], useThinking: boolean, mode: SessionMode, useSearch: boolean, searchProvider: 'scira' | 'exa' | 'tavily', existingMsgId?: string) => {
     if (!activeSessionId) return;
     const currentSessionId = activeSessionId; 
 
@@ -666,8 +669,47 @@ export const App: React.FC = () => {
     }
 
     try {
+        let enhancedText = text;
+        let searchThought = "";
+
+        // SEARCH LOGIC
+        if (useSearch) {
+            let apiKey = '';
+            if (searchProvider === 'scira') apiKey = settings.apiKeys.scira;
+            else if (searchProvider === 'exa') apiKey = settings.apiKeys.exa;
+            else if (searchProvider === 'tavily') apiKey = settings.apiKeys.tavily;
+            
+            const providerName = searchProvider === 'scira' ? 'Scira' : (searchProvider === 'exa' ? 'Exa' : 'Tavily');
+
+            if (apiKey) {
+                setSessionMessages(prev => {
+                    const msgs = prev[currentSessionId] || [];
+                    return { ...prev, [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, thoughtProcess: `Searching the web with ${providerName}...` } : m) };
+                });
+
+                try {
+                    let searchResult = "";
+                    if (searchProvider === 'scira') {
+                        searchResult = await searchScira(text, apiKey);
+                    } else if (searchProvider === 'exa') {
+                        searchResult = await searchExa(text, apiKey);
+                    } else if (searchProvider === 'tavily') {
+                        searchResult = await searchTavily(text, apiKey);
+                    }
+                    
+                    searchThought = `_**${providerName} Search Performed**_\n\n_Based on your query, I searched for information._\n\n`;
+                    enhancedText = `CONTEXT FROM WEB SEARCH (Use this to answer the user request):\n${searchResult}\n\nUSER QUERY:\n${text}`;
+                } catch (err: any) {
+                    console.error("Search Failed", err);
+                    searchThought = `**${providerName} Search Failed**: ${err.message}\n\n`;
+                }
+            }
+        }
+
         const finalMsgsAfterStateUpdate = sessionMessages[currentSessionId] || [];
         const currentIndex = finalMsgsAfterStateUpdate.findIndex(m => m.id === newMessageId);
+        
+        // Construct history, but for the *current* user message (last one), use the potentially enhanced text
         const historyData = finalMsgsAfterStateUpdate.slice(0, currentIndex).map(m => {
             const parts: any[] = [];
             if (m.content && m.content.trim()) parts.push({ text: m.content });
@@ -707,9 +749,10 @@ export const App: React.FC = () => {
         const onStreamUpdate = (content: string, thoughtProcess?: string) => {
             setSessionMessages(prev => {
                 const msgs = prev[currentSessionId] || [];
+                const combinedThought = (searchThought ? searchThought + (thoughtProcess ? '\n---\n' : '') : '') + (thoughtProcess || '');
                 return {
                     ...prev,
-                    [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, content, thoughtProcess } : m)
+                    [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, content, thoughtProcess: combinedThought || undefined } : m)
                 };
             });
         };
@@ -724,7 +767,7 @@ export const App: React.FC = () => {
             // Fetch parallel responses
             const modelResponses = await Promise.all(activeSession.councilModels.map(async (mId) => {
                 const res = await sendMessageToGemini(
-                    text, 
+                    enhancedText, 
                     historyData, 
                     systemInstruction, 
                     attachments, 
@@ -760,7 +803,7 @@ export const App: React.FC = () => {
 
         } else {
             response = await sendMessageToGemini(
-                text, 
+                enhancedText, 
                 historyData, 
                 systemInstruction, 
                 attachments, 
@@ -773,13 +816,23 @@ export const App: React.FC = () => {
             );
         }
         
-        const cleanText = executeAICommands(response.text, currentSessionId);
+        let cleanText = executeAICommands(response.text, currentSessionId);
+        
+        // Fallback for models that might return empty content but have valid reasoning (e.g. specialized thinking models)
+        if (!cleanText && (response.thoughtProcess || searchThought) && mode !== 'council') {
+             // If we have thoughts but no content, check if we should just show thoughts or error
+             // We can leave cleanText empty, but ensure thoughtProcess is updated. 
+             // Ideally we might want to prompt user to check thoughts.
+        } else if (!cleanText && !response.thoughtProcess && !searchThought) {
+             cleanText = "Error: The model returned an empty response.";
+        }
         
         setSessionMessages(prev => {
             const msgs = prev[currentSessionId] || [];
+            const combinedThought = (searchThought ? searchThought + (response.thoughtProcess ? '\n---\n' : '') : '') + (response.thoughtProcess || '');
             return {
                 ...prev,
-                [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, content: cleanText, thoughtProcess: response.thoughtProcess, model: mode === 'council' ? 'council' : actualModel } : m)
+                [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, content: cleanText, thoughtProcess: combinedThought || undefined, model: mode === 'council' ? 'council' : actualModel } : m)
             };
         });
 
@@ -821,9 +874,19 @@ export const App: React.FC = () => {
           // Basic Validation
           if (!data.settings || !data.sessions) throw new Error("Invalid backup file");
 
+          // Merge settings to ensure new fields (like apiKeys) are present
+          const mergedSettings = {
+              ...DEFAULT_SETTINGS,
+              ...data.settings,
+              apiKeys: {
+                  ...DEFAULT_SETTINGS.apiKeys,
+                  ...(data.settings.apiKeys || {})
+              }
+          };
+
           // Direct LocalStorage Write to prevent React state race conditions during restore
           try {
-              window.localStorage.setItem('shuper_settings', JSON.stringify(data.settings));
+              window.localStorage.setItem('shuper_settings', JSON.stringify(mergedSettings));
               window.localStorage.setItem('shuper_sessions', JSON.stringify(data.sessions));
               
               if (data.messages) window.localStorage.setItem('shuper_messages', JSON.stringify(data.messages));
@@ -1076,6 +1139,9 @@ export const App: React.FC = () => {
                                 sendKey={settings.sendKey}
                                 hasOpenRouterKey={!!(settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt)}
                                 hasRoutewayKey={!!settings.apiKeys.routeway}
+                                hasSciraKey={!!settings.apiKeys.scira}
+                                hasExaKey={!!settings.apiKeys.exa}
+                                hasTavilyKey={!!settings.apiKeys.tavily}
                                 onBackToList={() => setIsMobileSessionListOpen(true)}
                                 onOpenSidebar={() => setIsMobileSidebarOpen(true)}
                                 hasAnyKey={hasAnyKey}

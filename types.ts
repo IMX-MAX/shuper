@@ -93,6 +93,9 @@ export interface UserSettings {
       openRouter: string;
       openRouterAlt: string;
       routeway: string;
+      scira: string;
+      exa: string;
+      tavily: string;
   };
 }
 
@@ -128,6 +131,8 @@ export const ROUTEWAY_MODELS = [
     'llama-3.1-8b-instruct:free',
     'mistral-nemo-instruct:free'
 ];
+
+export const SCIRA_MODELS = []; // Deprecated as models, now a tool
 
 export const MODEL_FRIENDLY_NAMES: Record<string, string> = {
     // Gemini
