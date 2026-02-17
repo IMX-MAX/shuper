@@ -212,8 +212,35 @@ const PROXIES = [
 ];
 
 async function fetchJsonWithRetry(url: string, options: RequestInit, providerName: string): Promise<any> {
-    let lastError: any;
+    // 1. Try Direct Fetch first
+    // Many providers allow CORS or have specific allowed origins.
+    try {
+        const response = await fetch(url, options);
+        
+        // If 200 OK, return json
+        if (response.ok) return await response.json();
+        
+        // If 401 Unauthorized, proxy won't fix it (wrong key)
+        if (response.status === 401) {
+             const errText = await response.text();
+             throw new Error(`Unauthorized (401): ${errText}`);
+        }
 
+        // If other error code, might be blocking (403) or server error (500). 
+        // We throw here to fall through to proxy retry, EXCEPT for 400 Bad Request which is likely logic error.
+        if (response.status === 400) {
+            const errText = await response.text();
+            throw new Error(`Bad Request (400): ${errText}`);
+        }
+        
+        throw new Error(`Direct fetch failed with status ${response.status}`);
+    } catch (e: any) {
+        // If network error (CORS block) or non-fatal error, log and try proxies
+        console.warn(`[${providerName}] Direct fetch failed (${e.message}), attempting proxies...`);
+    }
+
+    // 2. Try Proxies
+    let lastError: any;
     for (const proxyGen of PROXIES) {
         try {
             const proxyUrl = proxyGen(url);
@@ -228,7 +255,13 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
                     const json = JSON.parse(errText);
                     errText = json.error?.message || json.message || errText;
                  } catch {}
-                 throw new Error(`Status ${response.status}: ${errText.slice(0, 100)}`);
+                 
+                 // If 401/400 from proxy, it means the target API rejected it, so stop retrying
+                 if (response.status === 400 || response.status === 401) {
+                    throw new Error(`API Error ${response.status}: ${errText.slice(0, 100)}`);
+                 }
+                 
+                 throw new Error(`Proxy Status ${response.status}: ${errText.slice(0, 100)}`);
             }
             
             return await response.json();
@@ -237,7 +270,10 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
             lastError = e;
         }
     }
-    throw new Error(`${providerName} connection failed. The browser blocked the request (CORS) or the proxy is down.`);
+    
+    // 3. Fallback / Failure
+    const errorMsg = lastError?.message || "Unknown error";
+    throw new Error(`${providerName} connection failed. The browser blocked the request (CORS) and proxies are unavailable. Details: ${errorMsg}`);
 }
 
 /**
@@ -359,7 +395,9 @@ export const searchTavily = async (
 
     const endpoint = 'https://api.tavily.com/search';
     
+    // Tavily expects api_key in the body or as query param, not typically as Bearer token for client-side
     const body = {
+        api_key: apiKey.trim(),
         query: query,
         topic: "general",
         search_depth: "basic",
@@ -372,8 +410,7 @@ export const searchTavily = async (
         const data = await fetchJsonWithRetry(endpoint, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey.trim()}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(body)
         }, 'Tavily');
