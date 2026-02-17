@@ -6,221 +6,238 @@ import { Attachment, OPENROUTER_FREE_MODELS, SessionMode, UserSettings, Label, R
  * Generates a concise title for a session using the Gemini API.
  */
 export const generateSessionTitle = async (
-    history: { role: string, parts: any[] }[],
-    currentTitle: string,
-    modelName: string = 'gemini-3-flash-preview',
-    apiKey?: string
+  history: {role: string, parts: any[]}[], 
+  currentTitle: string,
+  modelName: string = 'gemini-3-flash-preview',
+  apiKey?: string
 ): Promise<string> => {
-    const key = apiKey || process.env.API_KEY;
-    if (!key) return currentTitle;
+  const key = apiKey || process.env.API_KEY;
+  if (!key) return currentTitle;
 
-    const ai = new GoogleGenAI({ apiKey: key });
-    try {
-        const chatHistory = history.slice(-6).map(h => ({
-            role: h.role === 'model' ? 'model' : 'user',
-            parts: h.parts
-        }));
+  const ai = new GoogleGenAI({ apiKey: key });
+  try {
+    const chatHistory = history.slice(-6).map(h => ({
+      role: h.role === 'model' ? 'model' : 'user',
+      parts: h.parts
+    }));
 
-        const response = await ai.models.generateContent({
-            model: modelName,
-            contents: [
-                ...chatHistory,
-                {
-                    role: 'user',
-                    parts: [{ text: "Summarize this conversation into a 3-5 word title. Return ONLY the title text, no quotes or punctuation." }]
-                }
-            ],
-            config: {
-                temperature: 0.5,
-            }
-        });
-
-        return response.text?.trim() || currentTitle;
-    } catch (error) {
-        console.error("Title generation error:", error);
-        return currentTitle;
-    }
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [
+        ...chatHistory,
+        { 
+          role: 'user', 
+          parts: [{ text: "Summarize this conversation into a 3-5 word title. Return ONLY the title text, no quotes or punctuation." }] 
+        }
+      ],
+      config: {
+        temperature: 0.5,
+      }
+    });
+    
+    return response.text?.trim() || currentTitle;
+  } catch (error) {
+    console.error("Title generation error:", error);
+    return currentTitle;
+  }
 };
 
 /**
  * Suggests appropriate labels from available list based on conversation content.
  */
 export const suggestLabels = async (
-    history: { role: string, parts: any[] }[],
-    availableLabels: Label[],
-    apiKey?: string
+  history: {role: string, parts: any[]}[],
+  availableLabels: Label[],
+  apiKey?: string
 ): Promise<string[]> => {
-    if (availableLabels.length === 0) return [];
-    const key = apiKey || process.env.API_KEY;
-    if (!key) return [];
+  if (availableLabels.length === 0) return [];
+  const key = apiKey || process.env.API_KEY;
+  if (!key) return [];
 
-    const ai = new GoogleGenAI({ apiKey: key });
-    try {
-        const labelContext = availableLabels.map(l => `${l.id}: ${l.name}`).join('\n');
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: [
-                ...history.slice(-10),
-                {
-                    role: 'user',
-                    parts: [{ text: `Based on the conversation history provided, which of the following labels apply? Return a JSON array of label IDs only.\nAvailable Labels:\n${labelContext}` }]
-                }
-            ],
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                }
-            }
-        });
-
-        return JSON.parse(response.text || "[]");
-    } catch (error) {
-        console.error("Label suggestion error:", error);
-        return [];
-    }
+  const ai = new GoogleGenAI({ apiKey: key });
+  try {
+    const labelContext = availableLabels.map(l => `${l.id}: ${l.name}`).join('\n');
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: [
+        ...history.slice(-10),
+        {
+          role: 'user',
+          parts: [{ text: `Based on the conversation history provided, which of the following labels apply? Return a JSON array of label IDs only.\nAvailable Labels:\n${labelContext}` }]
+        }
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        }
+      }
+    });
+    
+    return JSON.parse(response.text || "[]");
+  } catch (error) {
+    console.error("Label suggestion error:", error);
+    return [];
+  }
 };
 
 /**
  * Sends a message to Gemini or an OpenAI-compatible provider.
  */
 export const sendMessageToGemini = async (
-    message: string,
-    history: { role: string, parts: any[] }[],
-    systemInstruction: string | undefined,
-    attachments: Attachment[] = [],
-    useThinking: boolean = false,
-    onUpdate?: (content: string, thoughtProcess?: string) => void,
-    apiKeys?: UserSettings['apiKeys'],
-    modelName: string = 'gemini-3-flash-preview',
-    mode: SessionMode = 'explore',
-    signal?: AbortSignal
+  message: string, 
+  history: {role: string, parts: any[]}[], 
+  systemInstruction: string | undefined,
+  attachments: Attachment[] = [],
+  useThinking: boolean = false,
+  onUpdate?: (content: string, thoughtProcess?: string) => void,
+  apiKeys?: UserSettings['apiKeys'],
+  modelName: string = 'gemini-3-flash-preview',
+  mode: SessionMode = 'explore',
+  signal?: AbortSignal
 ): Promise<{ text: string; thoughtProcess?: string }> => {
+  
+  const trimmedModel = modelName.trim();
+  
+  // Check if model is in the Routeway list.
+  const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
 
-    const trimmedModel = modelName.trim();
+  // Use the model ID exactly as is (including :free) to ensure correct API routing
+  const actualModel = trimmedModel;
 
-    // Check if model is in the Routeway list.
-    const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
+  const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || (trimmedModel.includes(':free') && !isRouteway);
 
-    // Use the model ID exactly as is (including :free) to ensure correct API routing
-    const actualModel = trimmedModel;
+  // Fallback to Pro for execute mode if not using external provider
+  let finalModel = actualModel;
+  if (mode === 'execute' && !isOpenRouter && !isRouteway && !actualModel.includes('gemini-3-pro')) {
+      finalModel = 'gemini-3-pro-preview';
+  }
 
-    const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || (trimmedModel.includes(':free') && !isRouteway);
+  // Prepend "You are running in Shuper" to ensure model self-awareness
+  let updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
 
-    // Fallback to Pro for execute mode if not using external provider
-    let finalModel = actualModel;
-    if (mode === 'execute' && !isOpenRouter && !isRouteway && !actualModel.includes('gemini-3-pro')) {
-        finalModel = 'gemini-3-pro-preview';
-    }
+  if (isOpenRouter || isRouteway) {
+      return sendMessageToOpenAICompatible(
+          message, 
+          history, 
+          updatedSystemInstruction, 
+          useThinking, 
+          onUpdate, 
+          apiKeys, 
+          finalModel,
+          signal
+      );
+  }
 
-    // Prepend "You are running in Shuper" to ensure model self-awareness
-    let updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
+  const geminiKey = apiKeys?.gemini || process.env.API_KEY;
+  if (!geminiKey) return { text: "Missing Gemini API Key. Please add it in Settings." };
 
-    if (isOpenRouter || isRouteway) {
-        return sendMessageToOpenAICompatible(
-            message,
-            history,
-            updatedSystemInstruction,
-            useThinking,
-            onUpdate,
-            apiKeys,
-            finalModel,
-            signal
-        );
-    }
-
-    const geminiKey = apiKeys?.gemini || process.env.API_KEY;
-    if (!geminiKey) return { text: "Missing Gemini API Key. Please add it in Settings." };
-
-    const ai = new GoogleGenAI({ apiKey: geminiKey });
-
-    try {
-        let finalMessage = message;
-        const currentParts: any[] = [];
-
-        // Process attachments first to append text ones to message
-        attachments.forEach(att => {
-            const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
-
-            if (att.type.startsWith('text/')) {
-                try {
-                    // Decode base64 to text and append to the message prompt
-                    const textContent = decodeURIComponent(escape(atob(base64Data)));
-                    finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[File: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
-                } catch (e) {
-                    console.error("Error decoding text attachment", e);
+  const ai = new GoogleGenAI({ apiKey: geminiKey });
+  
+  try {
+    let finalMessage = message;
+    const currentParts: any[] = [];
+    
+    // Process attachments first to append text ones to message
+    attachments.forEach(att => {
+        const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
+        
+        if (att.type.startsWith('text/')) {
+            try {
+                // Decode base64 to text and append to the message prompt
+                const textContent = decodeURIComponent(escape(atob(base64Data)));
+                finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[File: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
+            } catch (e) {
+                console.error("Error decoding text attachment", e);
+            }
+        } else {
+            // For images/PDFs, use inlineData
+            currentParts.push({
+                inlineData: {
+                    mimeType: att.type,
+                    data: base64Data
                 }
-            } else {
-                // For images/PDFs, use inlineData
-                currentParts.push({
-                    inlineData: {
-                        mimeType: att.type,
-                        data: base64Data
-                    }
-                });
-            }
-        });
-
-        if (finalMessage && finalMessage.trim()) currentParts.push({ text: finalMessage });
-        else if (currentParts.length === 0) currentParts.push({ text: " " });
-
-        const config: any = {
-            systemInstruction: updatedSystemInstruction.trim() || undefined,
-        };
-
-        const isThinkingSupported = finalModel.includes('gemini-3') || finalModel.includes('gemini-2.5');
-
-        if (isThinkingSupported) {
-            if (mode === 'execute') {
-                config.thinkingConfig = { thinkingBudget: 32768 };
-            } else {
-                // Explicitly disable thinking to prevent plan-leakage in Explore mode
-                config.thinkingConfig = { thinkingBudget: 0 };
-            }
+            });
         }
+    });
 
-        const responseStream = await ai.models.generateContentStream({
-            model: finalModel,
-            contents: [...history, { role: 'user', parts: currentParts }],
-            config: config,
-            signal
-        });
+    if (finalMessage && finalMessage.trim()) currentParts.push({ text: finalMessage });
+    else if (currentParts.length === 0) currentParts.push({ text: " " });
 
-        let fullText = "";
-        for await (const chunk of responseStream) {
-            if (signal?.aborted) throw new Error("AbortError");
-            const chunkText = chunk.text || "";
-            fullText += chunkText;
-            if (onUpdate) onUpdate(fullText, undefined);
+    const config: any = {
+        systemInstruction: updatedSystemInstruction.trim() || undefined,
+    };
+
+    const isThinkingSupported = finalModel.includes('gemini-3') || finalModel.includes('gemini-2.5');
+
+    if (isThinkingSupported) {
+        if (mode === 'execute') {
+            config.thinkingConfig = { thinkingBudget: 32768 }; 
+        } else {
+            // Explicitly disable thinking to prevent plan-leakage in Explore mode
+            config.thinkingConfig = { thinkingBudget: 0 };
         }
-
-        return { text: fullText };
-    } catch (error: any) {
-        if (error.name === 'AbortError' || error.message === 'AbortError') {
-            return { text: "[Stopped by user]" };
-        }
-        console.error("Gemini API Error:", error);
-        return { text: `Error: ${error.message || "Failed to communicate with Gemini"}` };
-    }
-};
-
-/**
- * Resolves the correct API URL based on environment.
- * In development: uses Vite's dev server proxy (e.g. /api/tavily/search)
- * In production: uses the production proxy at shuperapp.nafen.sbs
- */
-const getApiUrl = (service: 'tavily' | 'scira' | 'exa' | 'openrouter' | 'routeway', path: string): string => {
-    const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-    if (isDev) {
-        // Vite dev server proxy handles these paths
-        return `/api/${service}${path}`;
     }
 
-    // Production: use the production proxy on your domain
-    return `https://shuperapp.nafen.sbs/api/${service}${path}`;
+    const responseStream = await ai.models.generateContentStream({
+      model: finalModel,
+      contents: [...history, { role: 'user', parts: currentParts }],
+      config: config,
+      signal
+    });
+
+    let fullText = "";
+    for await (const chunk of responseStream) {
+      if (signal?.aborted) throw new Error("AbortError");
+      const chunkText = chunk.text || "";
+      fullText += chunkText;
+      if (onUpdate) onUpdate(fullText, undefined); 
+    }
+
+    return { text: fullText };
+  } catch (error: any) {
+    if (error.name === 'AbortError' || error.message === 'AbortError') {
+        return { text: "[Stopped by user]" };
+    }
+    console.error("Gemini API Error:", error);
+    return { text: `Error: ${error.message || "Failed to communicate with Gemini"}` };
+  }
 };
+
+const PROXIES = [
+    (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`
+];
+
+async function fetchJsonWithRetry(url: string, options: RequestInit, providerName: string): Promise<any> {
+    let lastError: any;
+
+    for (const proxyGen of PROXIES) {
+        try {
+            const proxyUrl = proxyGen(url);
+            const response = await fetch(proxyUrl, {
+                ...options,
+                credentials: 'omit'
+            });
+
+            if (!response.ok) {
+                 let errText = await response.text().catch(() => '');
+                 try {
+                    const json = JSON.parse(errText);
+                    errText = json.error?.message || json.message || errText;
+                 } catch {}
+                 throw new Error(`Status ${response.status}: ${errText.slice(0, 100)}`);
+            }
+            
+            return await response.json();
+        } catch (e: any) {
+            console.warn(`[${providerName}] Proxy failed via ${proxyGen(url).split('?')[0]}`, e);
+            lastError = e;
+        }
+    }
+    throw new Error(`${providerName} connection failed. The browser blocked the request (CORS) or the proxy is down.`);
+}
 
 /**
  * Searches Scira and returns the results.
@@ -233,16 +250,16 @@ export const searchScira = async (
     if (!apiKey) throw new Error("Scira API Key is missing.");
     if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
 
-    const url = getApiUrl('scira', '/api/search');
-
-    const body = {
+    const endpoint = 'https://api.scira.ai/api/search';
+    
+    const body = { 
         messages: [
             { role: 'user', content: query }
-        ]
+        ] 
     };
 
     try {
-        const response = await fetch(url, {
+        const data = await fetchJsonWithRetry(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -250,26 +267,17 @@ export const searchScira = async (
                 'HTTP-Referer': window.location.origin,
                 'X-Title': 'Shuper Workspace'
             },
-            body: JSON.stringify(body),
-        });
+            body: JSON.stringify(body)
+        }, 'Scira');
 
-        if (!response.ok) {
-            let errorMsg = `API Error: ${response.status}`;
-            try {
-                const errData = await response.json();
-                if (errData.error) errorMsg += ` - ${errData.error}`;
-            } catch { }
-            throw new Error(errorMsg);
-        }
-
-        const data = await response.json();
         let formattedText = "";
 
         if (data.text) {
             formattedText = data.text;
-
+            
+            // Append sources if present
             if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
-                formattedText += `\n\n---\n**Sources:**\n` +
+                formattedText += `\n\n---\n**Sources:**\n` + 
                     data.sources.map((s: string) => `- <${s}>`).join('\n');
             }
         } else {
@@ -280,10 +288,7 @@ export const searchScira = async (
 
     } catch (error: any) {
         console.error("Scira API Error:", error);
-        if (error.message === 'Failed to fetch') {
-            throw new Error(`Unable to connect to Scira API. Check your network connection and try again.`);
-        }
-        throw new Error(`${error.message || "Failed to communicate with Scira"}`);
+        throw error;
     }
 };
 
@@ -297,7 +302,7 @@ export const searchExa = async (
     if (!apiKey) throw new Error("Exa API Key is missing.");
     if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
 
-    const url = getApiUrl('exa', '/search');
+    const endpoint = 'https://api.exa.ai/search';
 
     const body = {
         query: query,
@@ -311,25 +316,15 @@ export const searchExa = async (
     };
 
     try {
-        const response = await fetch(url, {
+        const data = await fetchJsonWithRetry(endpoint, {
             method: 'POST',
             headers: {
                 'x-api-key': apiKey.trim(),
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(body),
-        });
+            body: JSON.stringify(body)
+        }, 'Exa');
 
-        if (!response.ok) {
-            let errorMsg = `API Error: ${response.status}`;
-            try {
-                const errData = await response.json();
-                errorMsg += ` - ${JSON.stringify(errData)}`;
-            } catch { }
-            throw new Error(errorMsg);
-        }
-
-        const data = await response.json();
         let formattedText = "";
 
         if (data.results && Array.isArray(data.results)) {
@@ -347,10 +342,7 @@ export const searchExa = async (
 
     } catch (error: any) {
         console.error("Exa API Error:", error);
-        if (error.message === 'Failed to fetch') {
-            throw new Error(`Unable to connect to Exa API. Check your network connection and try again.`);
-        }
-        throw new Error(`${error.message || "Failed to communicate with Exa"}`);
+        throw error;
     }
 };
 
@@ -364,8 +356,8 @@ export const searchTavily = async (
     if (!apiKey) throw new Error("Tavily API Key is missing.");
     if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
 
-    const url = getApiUrl('tavily', '/search');
-
+    const endpoint = 'https://api.tavily.com/search';
+    
     const body = {
         query: query,
         topic: "general",
@@ -376,25 +368,15 @@ export const searchTavily = async (
     };
 
     try {
-        const response = await fetch(url, {
+        const data = await fetchJsonWithRetry(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey.trim()}`
             },
-            body: JSON.stringify(body),
-        });
+            body: JSON.stringify(body)
+        }, 'Tavily');
 
-        if (!response.ok) {
-            let errorMsg = `API Error: ${response.status}`;
-            try {
-                const errData = await response.json();
-                errorMsg += ` - ${JSON.stringify(errData)}`;
-            } catch { }
-            throw new Error(errorMsg);
-        }
-
-        const data = await response.json();
         let formattedText = "";
 
         if (data.answer) {
@@ -416,24 +398,21 @@ export const searchTavily = async (
 
     } catch (error: any) {
         console.error("Tavily API Error:", error);
-        if (error.message === 'Failed to fetch') {
-            throw new Error(`Unable to connect to Tavily API. Check your network connection and try again.`);
-        }
-        throw new Error(`${error.message || "Failed to communicate with Tavily"}`);
+        throw error;
     }
 };
 
 const sendMessageToOpenAICompatible = async (
-    message: string,
-    history: { role: string, parts: any[] }[],
+    message: string, 
+    history: {role: string, parts: any[]}[], 
     systemInstruction: string | undefined,
     useThinking: boolean,
     onUpdate: ((content: string, thoughtProcess?: string) => void) | undefined,
-    apiKeys: UserSettings['apiKeys'] | undefined,
+    apiKeys: UserSettings['apiKeys'] | undefined, 
     modelName: string,
     signal?: AbortSignal
 ): Promise<{ text: string; thoughtProcess?: string }> => {
-
+    
     if (!apiKeys) return { text: `API configuration missing. Please check Settings.` };
 
     const trimmedModel = modelName.trim();
@@ -441,11 +420,11 @@ const sendMessageToOpenAICompatible = async (
     const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
 
     let fullUrl = '';
-
+    
     if (isRouteway) {
-        fullUrl = getApiUrl('routeway', '/v1/chat/completions');
+        fullUrl = 'https://api.routeway.ai/v1/chat/completions';
     } else {
-        fullUrl = getApiUrl('openrouter', '/api/v1/chat/completions');
+        fullUrl = 'https://openrouter.ai/api/v1/chat/completions';
     }
 
     const messages = [];
@@ -509,7 +488,7 @@ const sendMessageToOpenAICompatible = async (
             }
             throw new Error(errorMessage);
         }
-
+        
         if (!response.body) throw new Error("No response body received from provider.");
 
         const reader = response.body.getReader();
@@ -517,11 +496,11 @@ const sendMessageToOpenAICompatible = async (
         let buffer = '';
         let fullText = '';
         let fullThinking = '';
-
+        
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-
+            
             const chunk = decoder.decode(value, { stream: true });
             const lines = (buffer + chunk).split('\n');
             buffer = lines.pop() || '';
@@ -546,7 +525,7 @@ const sendMessageToOpenAICompatible = async (
                         fullText += content;
                         if (onUpdate) onUpdate(fullText, fullThinking || undefined);
                     }
-                } catch (e) { }
+                } catch (e) {}
             }
         }
         return { text: fullText, thoughtProcess: fullThinking || undefined };
