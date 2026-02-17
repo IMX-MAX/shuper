@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Attachment, OPENROUTER_FREE_MODELS, SessionMode, UserSettings, Label, ROUTEWAY_MODELS } from "../types";
+import { Attachment, OPENROUTER_FREE_MODELS, SessionMode, UserSettings, Label, ROUTEWAY_MODELS, Agent } from "../types";
 
 /**
  * Generates a concise title for a session using the Gemini API.
@@ -115,7 +115,18 @@ export const sendMessageToGemini = async (
   }
 
   // Prepend "You are running in Shuper" to ensure model self-awareness
-  const updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
+  let updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
+
+  // Check if the current 'modelName' matches an ID of an agent that might have tools
+  // Note: Since we don't have direct access to the `agents` list here, we rely on the caller 
+  // having already injected the agent's specific instructions into `systemInstruction`.
+  // However, we can perform a check if the system instruction contains tool definitions,
+  // or more robustly, we assume the Agent logic in App.tsx sets up the prompt.
+  // BUT, to handle the specific "MCP" request context nicely:
+  
+  // To handle Agent tools robustly, if this were a backend, we'd fetch the schema. 
+  // Here we assume the frontend App logic has already retrieved the agent details. 
+  // We can add a generic prompt injection for "tool awareness" if not already present.
 
   if (isOpenRouter || isRouteway) {
       return sendMessageToOpenAICompatible(
@@ -136,20 +147,34 @@ export const sendMessageToGemini = async (
   const ai = new GoogleGenAI({ apiKey: geminiKey });
   
   try {
+    let finalMessage = message;
     const currentParts: any[] = [];
-    if (message && message.trim()) currentParts.push({ text: message });
     
+    // Process attachments first to append text ones to message
     attachments.forEach(att => {
         const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
-        currentParts.push({
-            inlineData: {
-                mimeType: att.type,
-                data: base64Data
+        
+        if (att.type.startsWith('text/')) {
+            try {
+                // Decode base64 to text and append to the message prompt
+                const textContent = decodeURIComponent(escape(atob(base64Data)));
+                finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[File: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
+            } catch (e) {
+                console.error("Error decoding text attachment", e);
             }
-        });
+        } else {
+            // For images/PDFs, use inlineData
+            currentParts.push({
+                inlineData: {
+                    mimeType: att.type,
+                    data: base64Data
+                }
+            });
+        }
     });
 
-    if (currentParts.length === 0) currentParts.push({ text: " " });
+    if (finalMessage && finalMessage.trim()) currentParts.push({ text: finalMessage });
+    else if (currentParts.length === 0) currentParts.push({ text: " " });
 
     const config: any = {
         systemInstruction: updatedSystemInstruction.trim() || undefined,
@@ -220,7 +245,8 @@ const sendMessageToOpenAICompatible = async (
     if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
 
     history.forEach(h => {
-        const content = h.parts.map(p => p.text).join(' ');
+        // Concatenate text parts
+        const content = h.parts.filter(p => p.text).map(p => p.text).join(' ');
         if (content.trim()) {
             messages.push({ role: h.role === 'model' ? 'assistant' : 'user', content });
         }
