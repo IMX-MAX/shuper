@@ -6,203 +6,220 @@ import { Attachment, OPENROUTER_FREE_MODELS, SessionMode, UserSettings, Label, R
  * Generates a concise title for a session using the Gemini API.
  */
 export const generateSessionTitle = async (
-  history: {role: string, parts: any[]}[], 
-  currentTitle: string,
-  modelName: string = 'gemini-3-flash-preview',
-  apiKey?: string
+    history: { role: string, parts: any[] }[],
+    currentTitle: string,
+    modelName: string = 'gemini-3-flash-preview',
+    apiKey?: string
 ): Promise<string> => {
-  const key = apiKey || process.env.API_KEY;
-  if (!key) return currentTitle;
+    const key = apiKey || process.env.API_KEY;
+    if (!key) return currentTitle;
 
-  const ai = new GoogleGenAI({ apiKey: key });
-  try {
-    const chatHistory = history.slice(-6).map(h => ({
-      role: h.role === 'model' ? 'model' : 'user',
-      parts: h.parts
-    }));
+    const ai = new GoogleGenAI({ apiKey: key });
+    try {
+        const chatHistory = history.slice(-6).map(h => ({
+            role: h.role === 'model' ? 'model' : 'user',
+            parts: h.parts
+        }));
 
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: [
-        ...chatHistory,
-        { 
-          role: 'user', 
-          parts: [{ text: "Summarize this conversation into a 3-5 word title. Return ONLY the title text, no quotes or punctuation." }] 
-        }
-      ],
-      config: {
-        temperature: 0.5,
-      }
-    });
-    
-    return response.text?.trim() || currentTitle;
-  } catch (error) {
-    console.error("Title generation error:", error);
-    return currentTitle;
-  }
+        const response = await ai.models.generateContent({
+            model: modelName,
+            contents: [
+                ...chatHistory,
+                {
+                    role: 'user',
+                    parts: [{ text: "Summarize this conversation into a 3-5 word title. Return ONLY the title text, no quotes or punctuation." }]
+                }
+            ],
+            config: {
+                temperature: 0.5,
+            }
+        });
+
+        return response.text?.trim() || currentTitle;
+    } catch (error) {
+        console.error("Title generation error:", error);
+        return currentTitle;
+    }
 };
 
 /**
  * Suggests appropriate labels from available list based on conversation content.
  */
 export const suggestLabels = async (
-  history: {role: string, parts: any[]}[],
-  availableLabels: Label[],
-  apiKey?: string
+    history: { role: string, parts: any[] }[],
+    availableLabels: Label[],
+    apiKey?: string
 ): Promise<string[]> => {
-  if (availableLabels.length === 0) return [];
-  const key = apiKey || process.env.API_KEY;
-  if (!key) return [];
+    if (availableLabels.length === 0) return [];
+    const key = apiKey || process.env.API_KEY;
+    if (!key) return [];
 
-  const ai = new GoogleGenAI({ apiKey: key });
-  try {
-    const labelContext = availableLabels.map(l => `${l.id}: ${l.name}`).join('\n');
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [
-        ...history.slice(-10),
-        {
-          role: 'user',
-          parts: [{ text: `Based on the conversation history provided, which of the following labels apply? Return a JSON array of label IDs only.\nAvailable Labels:\n${labelContext}` }]
-        }
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING }
-        }
-      }
-    });
-    
-    return JSON.parse(response.text || "[]");
-  } catch (error) {
-    console.error("Label suggestion error:", error);
-    return [];
-  }
+    const ai = new GoogleGenAI({ apiKey: key });
+    try {
+        const labelContext = availableLabels.map(l => `${l.id}: ${l.name}`).join('\n');
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: [
+                ...history.slice(-10),
+                {
+                    role: 'user',
+                    parts: [{ text: `Based on the conversation history provided, which of the following labels apply? Return a JSON array of label IDs only.\nAvailable Labels:\n${labelContext}` }]
+                }
+            ],
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                }
+            }
+        });
+
+        return JSON.parse(response.text || "[]");
+    } catch (error) {
+        console.error("Label suggestion error:", error);
+        return [];
+    }
 };
 
 /**
  * Sends a message to Gemini or an OpenAI-compatible provider.
  */
 export const sendMessageToGemini = async (
-  message: string, 
-  history: {role: string, parts: any[]}[], 
-  systemInstruction: string | undefined,
-  attachments: Attachment[] = [],
-  useThinking: boolean = false,
-  onUpdate?: (content: string, thoughtProcess?: string) => void,
-  apiKeys?: UserSettings['apiKeys'],
-  modelName: string = 'gemini-3-flash-preview',
-  mode: SessionMode = 'explore',
-  signal?: AbortSignal
+    message: string,
+    history: { role: string, parts: any[] }[],
+    systemInstruction: string | undefined,
+    attachments: Attachment[] = [],
+    useThinking: boolean = false,
+    onUpdate?: (content: string, thoughtProcess?: string) => void,
+    apiKeys?: UserSettings['apiKeys'],
+    modelName: string = 'gemini-3-flash-preview',
+    mode: SessionMode = 'explore',
+    signal?: AbortSignal
 ): Promise<{ text: string; thoughtProcess?: string }> => {
-  
-  const trimmedModel = modelName.trim();
-  
-  // Check if model is in the Routeway list.
-  const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
 
-  // Use the model ID exactly as is (including :free) to ensure correct API routing
-  const actualModel = trimmedModel;
+    const trimmedModel = modelName.trim();
 
-  const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || (trimmedModel.includes(':free') && !isRouteway);
+    // Check if model is in the Routeway list.
+    const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
 
-  // Fallback to Pro for execute mode if not using external provider
-  let finalModel = actualModel;
-  if (mode === 'execute' && !isOpenRouter && !isRouteway && !actualModel.includes('gemini-3-pro')) {
-      finalModel = 'gemini-3-pro-preview';
-  }
+    // Use the model ID exactly as is (including :free) to ensure correct API routing
+    const actualModel = trimmedModel;
 
-  // Prepend "You are running in Shuper" to ensure model self-awareness
-  let updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
+    const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || (trimmedModel.includes(':free') && !isRouteway);
 
-  if (isOpenRouter || isRouteway) {
-      return sendMessageToOpenAICompatible(
-          message, 
-          history, 
-          updatedSystemInstruction, 
-          useThinking, 
-          onUpdate, 
-          apiKeys, 
-          finalModel,
-          signal
-      );
-  }
+    // Fallback to Pro for execute mode if not using external provider
+    let finalModel = actualModel;
+    if (mode === 'execute' && !isOpenRouter && !isRouteway && !actualModel.includes('gemini-3-pro')) {
+        finalModel = 'gemini-3-pro-preview';
+    }
 
-  const geminiKey = apiKeys?.gemini || process.env.API_KEY;
-  if (!geminiKey) return { text: "Missing Gemini API Key. Please add it in Settings." };
+    // Prepend "You are running in Shuper" to ensure model self-awareness
+    let updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
 
-  const ai = new GoogleGenAI({ apiKey: geminiKey });
-  
-  try {
-    let finalMessage = message;
-    const currentParts: any[] = [];
-    
-    // Process attachments first to append text ones to message
-    attachments.forEach(att => {
-        const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
-        
-        if (att.type.startsWith('text/')) {
-            try {
-                // Decode base64 to text and append to the message prompt
-                const textContent = decodeURIComponent(escape(atob(base64Data)));
-                finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[File: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
-            } catch (e) {
-                console.error("Error decoding text attachment", e);
-            }
-        } else {
-            // For images/PDFs, use inlineData
-            currentParts.push({
-                inlineData: {
-                    mimeType: att.type,
-                    data: base64Data
+    if (isOpenRouter || isRouteway) {
+        return sendMessageToOpenAICompatible(
+            message,
+            history,
+            updatedSystemInstruction,
+            useThinking,
+            onUpdate,
+            apiKeys,
+            finalModel,
+            signal
+        );
+    }
+
+    const geminiKey = apiKeys?.gemini || process.env.API_KEY;
+    if (!geminiKey) return { text: "Missing Gemini API Key. Please add it in Settings." };
+
+    const ai = new GoogleGenAI({ apiKey: geminiKey });
+
+    try {
+        let finalMessage = message;
+        const currentParts: any[] = [];
+
+        // Process attachments first to append text ones to message
+        attachments.forEach(att => {
+            const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
+
+            if (att.type.startsWith('text/')) {
+                try {
+                    // Decode base64 to text and append to the message prompt
+                    const textContent = decodeURIComponent(escape(atob(base64Data)));
+                    finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[File: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
+                } catch (e) {
+                    console.error("Error decoding text attachment", e);
                 }
-            });
+            } else {
+                // For images/PDFs, use inlineData
+                currentParts.push({
+                    inlineData: {
+                        mimeType: att.type,
+                        data: base64Data
+                    }
+                });
+            }
+        });
+
+        if (finalMessage && finalMessage.trim()) currentParts.push({ text: finalMessage });
+        else if (currentParts.length === 0) currentParts.push({ text: " " });
+
+        const config: any = {
+            systemInstruction: updatedSystemInstruction.trim() || undefined,
+        };
+
+        const isThinkingSupported = finalModel.includes('gemini-3') || finalModel.includes('gemini-2.5');
+
+        if (isThinkingSupported) {
+            if (mode === 'execute') {
+                config.thinkingConfig = { thinkingBudget: 32768 };
+            } else {
+                // Explicitly disable thinking to prevent plan-leakage in Explore mode
+                config.thinkingConfig = { thinkingBudget: 0 };
+            }
         }
-    });
 
-    if (finalMessage && finalMessage.trim()) currentParts.push({ text: finalMessage });
-    else if (currentParts.length === 0) currentParts.push({ text: " " });
+        const responseStream = await ai.models.generateContentStream({
+            model: finalModel,
+            contents: [...history, { role: 'user', parts: currentParts }],
+            config: config,
+            signal
+        });
 
-    const config: any = {
-        systemInstruction: updatedSystemInstruction.trim() || undefined,
-    };
-
-    const isThinkingSupported = finalModel.includes('gemini-3') || finalModel.includes('gemini-2.5');
-
-    if (isThinkingSupported) {
-        if (mode === 'execute') {
-            config.thinkingConfig = { thinkingBudget: 32768 }; 
-        } else {
-            // Explicitly disable thinking to prevent plan-leakage in Explore mode
-            config.thinkingConfig = { thinkingBudget: 0 };
+        let fullText = "";
+        for await (const chunk of responseStream) {
+            if (signal?.aborted) throw new Error("AbortError");
+            const chunkText = chunk.text || "";
+            fullText += chunkText;
+            if (onUpdate) onUpdate(fullText, undefined);
         }
+
+        return { text: fullText };
+    } catch (error: any) {
+        if (error.name === 'AbortError' || error.message === 'AbortError') {
+            return { text: "[Stopped by user]" };
+        }
+        console.error("Gemini API Error:", error);
+        return { text: `Error: ${error.message || "Failed to communicate with Gemini"}` };
+    }
+};
+
+/**
+ * Resolves the correct API URL based on environment.
+ * In development: uses Vite's dev server proxy (e.g. /api/tavily/search)
+ * In production: uses the production proxy at shuperapp.nafen.sbs
+ */
+const getApiUrl = (service: 'tavily' | 'scira' | 'exa' | 'openrouter' | 'routeway', path: string): string => {
+    const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (isDev) {
+        // Vite dev server proxy handles these paths
+        return `/api/${service}${path}`;
     }
 
-    const responseStream = await ai.models.generateContentStream({
-      model: finalModel,
-      contents: [...history, { role: 'user', parts: currentParts }],
-      config: config,
-      signal
-    });
-
-    let fullText = "";
-    for await (const chunk of responseStream) {
-      if (signal?.aborted) throw new Error("AbortError");
-      const chunkText = chunk.text || "";
-      fullText += chunkText;
-      if (onUpdate) onUpdate(fullText, undefined); 
-    }
-
-    return { text: fullText };
-  } catch (error: any) {
-    if (error.name === 'AbortError' || error.message === 'AbortError') {
-        return { text: "[Stopped by user]" };
-    }
-    console.error("Gemini API Error:", error);
-    return { text: `Error: ${error.message || "Failed to communicate with Gemini"}` };
-  }
+    // Production: use the production proxy on your domain
+    return `https://shuperapp.nafen.sbs/api/${service}${path}`;
 };
 
 /**
@@ -216,19 +233,16 @@ export const searchScira = async (
     if (!apiKey) throw new Error("Scira API Key is missing.");
     if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
 
-    // Using corsproxy.io to bypass CORS restrictions for client-side requests
-    const endpoint = 'https://api.scira.ai/api/search';
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
-    
-    // Construct messages payload for Scira search
-    const body = { 
+    const url = getApiUrl('scira', '/api/search');
+
+    const body = {
         messages: [
             { role: 'user', content: query }
-        ] 
+        ]
     };
 
     try {
-        const response = await fetch(proxyUrl, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -237,7 +251,6 @@ export const searchScira = async (
                 'X-Title': 'Shuper Workspace'
             },
             body: JSON.stringify(body),
-            credentials: 'omit'
         });
 
         if (!response.ok) {
@@ -245,7 +258,7 @@ export const searchScira = async (
             try {
                 const errData = await response.json();
                 if (errData.error) errorMsg += ` - ${errData.error}`;
-            } catch {}
+            } catch { }
             throw new Error(errorMsg);
         }
 
@@ -254,10 +267,9 @@ export const searchScira = async (
 
         if (data.text) {
             formattedText = data.text;
-            
-            // Append sources if present
+
             if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
-                formattedText += `\n\n---\n**Sources:**\n` + 
+                formattedText += `\n\n---\n**Sources:**\n` +
                     data.sources.map((s: string) => `- <${s}>`).join('\n');
             }
         } else {
@@ -269,7 +281,7 @@ export const searchScira = async (
     } catch (error: any) {
         console.error("Scira API Error:", error);
         if (error.message === 'Failed to fetch') {
-            throw new Error(`Unable to connect to Scira API. The browser blocked the request (CORS).`);
+            throw new Error(`Unable to connect to Scira API. Check your network connection and try again.`);
         }
         throw new Error(`${error.message || "Failed to communicate with Scira"}`);
     }
@@ -285,8 +297,7 @@ export const searchExa = async (
     if (!apiKey) throw new Error("Exa API Key is missing.");
     if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
 
-    const endpoint = 'https://api.exa.ai/search';
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
+    const url = getApiUrl('exa', '/search');
 
     const body = {
         query: query,
@@ -300,14 +311,13 @@ export const searchExa = async (
     };
 
     try {
-        const response = await fetch(proxyUrl, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'x-api-key': apiKey.trim(),
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(body),
-            credentials: 'omit'
         });
 
         if (!response.ok) {
@@ -315,7 +325,7 @@ export const searchExa = async (
             try {
                 const errData = await response.json();
                 errorMsg += ` - ${JSON.stringify(errData)}`;
-            } catch {}
+            } catch { }
             throw new Error(errorMsg);
         }
 
@@ -338,7 +348,7 @@ export const searchExa = async (
     } catch (error: any) {
         console.error("Exa API Error:", error);
         if (error.message === 'Failed to fetch') {
-            throw new Error(`Unable to connect to Exa API. The browser blocked the request (CORS).`);
+            throw new Error(`Unable to connect to Exa API. Check your network connection and try again.`);
         }
         throw new Error(`${error.message || "Failed to communicate with Exa"}`);
     }
@@ -354,13 +364,7 @@ export const searchTavily = async (
     if (!apiKey) throw new Error("Tavily API Key is missing.");
     if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
 
-    const endpoint = 'https://api.tavily.com/search';
-    
-    // We try multiple proxies because Tavily can be picky about CORS/IPs
-    const proxies = [
-        `https://corsproxy.io/?${encodeURIComponent(endpoint)}`,
-        `https://thingproxy.freeboard.io/fetch/${endpoint}`
-    ];
+    const url = getApiUrl('tavily', '/search');
 
     const body = {
         query: query,
@@ -371,74 +375,65 @@ export const searchTavily = async (
         include_raw_content: false
     };
 
-    let lastError: any = null;
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey.trim()}`
+            },
+            body: JSON.stringify(body),
+        });
 
-    for (const proxyUrl of proxies) {
-        try {
-            const response = await fetch(proxyUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey.trim()}` // Use Header Auth for better proxy compatibility
-                },
-                body: JSON.stringify(body),
-                credentials: 'omit' // Important for CORS proxies
-            });
-
-            if (!response.ok) {
-                let errorMsg = `API Error: ${response.status}`;
-                try {
-                    const errData = await response.json();
-                    errorMsg += ` - ${JSON.stringify(errData)}`;
-                } catch {}
-                throw new Error(errorMsg);
-            }
-
-            const data = await response.json();
-            let formattedText = "";
-
-            if (data.answer) {
-                formattedText += `**Direct Answer:**\n${data.answer}\n\n---\n`;
-            }
-
-            if (data.results && Array.isArray(data.results)) {
-                formattedText += data.results.map((r: any, i: number) => {
-                    const title = r.title || 'Untitled';
-                    const url = r.url || '#';
-                    const content = r.content || 'No snippet available';
-                    return `**${i + 1}. [${title}](${url})**\n> ${content}\n`;
-                }).join('\n');
-            } else {
-                formattedText += "No detailed results returned from Tavily.";
-            }
-
-            return formattedText;
-
-        } catch (error: any) {
-            console.warn(`Tavily search via ${proxyUrl} failed:`, error);
-            lastError = error;
-            // Continue to next proxy...
+        if (!response.ok) {
+            let errorMsg = `API Error: ${response.status}`;
+            try {
+                const errData = await response.json();
+                errorMsg += ` - ${JSON.stringify(errData)}`;
+            } catch { }
+            throw new Error(errorMsg);
         }
-    }
 
-    console.error("All Tavily proxies failed:", lastError);
-    if (lastError?.message === 'Failed to fetch') {
-        throw new Error(`Unable to connect to Tavily API via proxy. The browser blocked the request (CORS).`);
+        const data = await response.json();
+        let formattedText = "";
+
+        if (data.answer) {
+            formattedText += `**Direct Answer:**\n${data.answer}\n\n---\n`;
+        }
+
+        if (data.results && Array.isArray(data.results)) {
+            formattedText += data.results.map((r: any, i: number) => {
+                const title = r.title || 'Untitled';
+                const url = r.url || '#';
+                const content = r.content || 'No snippet available';
+                return `**${i + 1}. [${title}](${url})**\n> ${content}\n`;
+            }).join('\n');
+        } else {
+            formattedText += "No detailed results returned from Tavily.";
+        }
+
+        return formattedText;
+
+    } catch (error: any) {
+        console.error("Tavily API Error:", error);
+        if (error.message === 'Failed to fetch') {
+            throw new Error(`Unable to connect to Tavily API. Check your network connection and try again.`);
+        }
+        throw new Error(`${error.message || "Failed to communicate with Tavily"}`);
     }
-    throw new Error(`${lastError?.message || "Failed to communicate with Tavily"}`);
 };
 
 const sendMessageToOpenAICompatible = async (
-    message: string, 
-    history: {role: string, parts: any[]}[], 
+    message: string,
+    history: { role: string, parts: any[] }[],
     systemInstruction: string | undefined,
     useThinking: boolean,
     onUpdate: ((content: string, thoughtProcess?: string) => void) | undefined,
-    apiKeys: UserSettings['apiKeys'] | undefined, 
+    apiKeys: UserSettings['apiKeys'] | undefined,
     modelName: string,
     signal?: AbortSignal
 ): Promise<{ text: string; thoughtProcess?: string }> => {
-    
+
     if (!apiKeys) return { text: `API configuration missing. Please check Settings.` };
 
     const trimmedModel = modelName.trim();
@@ -446,11 +441,11 @@ const sendMessageToOpenAICompatible = async (
     const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
 
     let fullUrl = '';
-    
+
     if (isRouteway) {
-        fullUrl = 'https://api.routeway.ai/v1/chat/completions';
+        fullUrl = getApiUrl('routeway', '/v1/chat/completions');
     } else {
-        fullUrl = 'https://openrouter.ai/api/v1/chat/completions';
+        fullUrl = getApiUrl('openrouter', '/api/v1/chat/completions');
     }
 
     const messages = [];
@@ -514,7 +509,7 @@ const sendMessageToOpenAICompatible = async (
             }
             throw new Error(errorMessage);
         }
-        
+
         if (!response.body) throw new Error("No response body received from provider.");
 
         const reader = response.body.getReader();
@@ -522,11 +517,11 @@ const sendMessageToOpenAICompatible = async (
         let buffer = '';
         let fullText = '';
         let fullThinking = '';
-        
+
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            
+
             const chunk = decoder.decode(value, { stream: true });
             const lines = (buffer + chunk).split('\n');
             buffer = lines.pop() || '';
@@ -551,7 +546,7 @@ const sendMessageToOpenAICompatible = async (
                         fullText += content;
                         if (onUpdate) onUpdate(fullText, fullThinking || undefined);
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
         }
         return { text: fullText, thoughtProcess: fullThinking || undefined };
