@@ -117,17 +117,6 @@ export const sendMessageToGemini = async (
   // Prepend "You are running in Shuper" to ensure model self-awareness
   let updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
 
-  // Check if the current 'modelName' matches an ID of an agent that might have tools
-  // Note: Since we don't have direct access to the `agents` list here, we rely on the caller 
-  // having already injected the agent's specific instructions into `systemInstruction`.
-  // However, we can perform a check if the system instruction contains tool definitions,
-  // or more robustly, we assume the Agent logic in App.tsx sets up the prompt.
-  // BUT, to handle the specific "MCP" request context nicely:
-  
-  // To handle Agent tools robustly, if this were a backend, we'd fetch the schema. 
-  // Here we assume the frontend App logic has already retrieved the agent details. 
-  // We can add a generic prompt injection for "tool awareness" if not already present.
-
   if (isOpenRouter || isRouteway) {
       return sendMessageToOpenAICompatible(
           message, 
@@ -214,6 +203,215 @@ export const sendMessageToGemini = async (
     console.error("Gemini API Error:", error);
     return { text: `Error: ${error.message || "Failed to communicate with Gemini"}` };
   }
+};
+
+/**
+ * Searches Scira and returns the results.
+ * Can be used for grounding before sending to another model.
+ */
+export const searchScira = async (
+    query: string,
+    apiKey: string | undefined
+): Promise<string> => {
+    if (!apiKey) throw new Error("Scira API Key is missing.");
+    if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
+
+    // Using corsproxy.io to bypass CORS restrictions for client-side requests
+    const endpoint = 'https://api.scira.ai/api/search';
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
+    
+    // Construct messages payload for Scira search
+    const body = { 
+        messages: [
+            { role: 'user', content: query }
+        ] 
+    };
+
+    try {
+        const response = await fetch(proxyUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey.trim()}`,
+                'HTTP-Referer': window.location.origin,
+                'X-Title': 'Shuper Workspace'
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            let errorMsg = `API Error: ${response.status}`;
+            try {
+                const errData = await response.json();
+                if (errData.error) errorMsg += ` - ${errData.error}`;
+            } catch {}
+            throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+        let formattedText = "";
+
+        if (data.text) {
+            formattedText = data.text;
+            
+            // Append sources if present
+            if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
+                formattedText += `\n\n---\n**Sources:**\n` + 
+                    data.sources.map((s: string) => `- <${s}>`).join('\n');
+            }
+        } else {
+            formattedText = "No structured text returned from Scira.";
+        }
+
+        return formattedText;
+
+    } catch (error: any) {
+        console.error("Scira API Error:", error);
+        if (error.message === 'Failed to fetch') {
+            throw new Error(`Unable to connect to Scira API. The browser blocked the request (CORS).`);
+        }
+        throw new Error(`${error.message || "Failed to communicate with Scira"}`);
+    }
+};
+
+/**
+ * Searches Exa and returns the results.
+ */
+export const searchExa = async (
+    query: string,
+    apiKey: string | undefined
+): Promise<string> => {
+    if (!apiKey) throw new Error("Exa API Key is missing.");
+    if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
+
+    const endpoint = 'https://api.exa.ai/search';
+    // Use proxy for Exa as well to be safe with CORS
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
+
+    const body = {
+        query: query,
+        type: "auto",
+        num_results: 10,
+        contents: {
+            highlights: {
+                max_characters: 2000
+            }
+        }
+    };
+
+    try {
+        const response = await fetch(proxyUrl, {
+            method: 'POST',
+            headers: {
+                'x-api-key': apiKey.trim(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            let errorMsg = `API Error: ${response.status}`;
+            try {
+                const errData = await response.json();
+                // Exa errors might look different, capture generic body if prop missing
+                errorMsg += ` - ${JSON.stringify(errData)}`;
+            } catch {}
+            throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+        let formattedText = "";
+
+        if (data.results && Array.isArray(data.results)) {
+            formattedText = data.results.map((r: any, i: number) => {
+                const title = r.title || 'Untitled';
+                const url = r.url || '#';
+                const highlight = r.highlights && r.highlights.length > 0 ? r.highlights[0] : (r.text || 'No snippet available');
+                return `**${i + 1}. [${title}](${url})**\n> ${highlight}\n`;
+            }).join('\n');
+        } else {
+            formattedText = "No results returned from Exa.";
+        }
+
+        return formattedText;
+
+    } catch (error: any) {
+        console.error("Exa API Error:", error);
+        if (error.message === 'Failed to fetch') {
+            throw new Error(`Unable to connect to Exa API. The browser blocked the request (CORS).`);
+        }
+        throw new Error(`${error.message || "Failed to communicate with Exa"}`);
+    }
+};
+
+/**
+ * Searches Tavily and returns the results.
+ */
+export const searchTavily = async (
+    query: string,
+    apiKey: string | undefined
+): Promise<string> => {
+    if (!apiKey) throw new Error("Tavily API Key is missing.");
+    if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
+
+    const endpoint = 'https://api.tavily.com/search';
+    // Use proxy for Tavily as well to be safe with CORS
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
+
+    const body = {
+        api_key: apiKey.trim(),
+        query: query,
+        search_depth: "basic",
+        max_results: 5,
+        include_answer: true,
+        include_raw_content: false
+    };
+
+    try {
+        const response = await fetch(proxyUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            let errorMsg = `API Error: ${response.status}`;
+            try {
+                const errData = await response.json();
+                errorMsg += ` - ${JSON.stringify(errData)}`;
+            } catch {}
+            throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+        let formattedText = "";
+
+        if (data.answer) {
+            formattedText += `**Direct Answer:**\n${data.answer}\n\n---\n`;
+        }
+
+        if (data.results && Array.isArray(data.results)) {
+            formattedText += data.results.map((r: any, i: number) => {
+                const title = r.title || 'Untitled';
+                const url = r.url || '#';
+                const content = r.content || 'No snippet available';
+                return `**${i + 1}. [${title}](${url})**\n> ${content}\n`;
+            }).join('\n');
+        } else {
+            formattedText += "No detailed results returned from Tavily.";
+        }
+
+        return formattedText;
+
+    } catch (error: any) {
+        console.error("Tavily API Error:", error);
+        if (error.message === 'Failed to fetch') {
+            throw new Error(`Unable to connect to Tavily API. The browser blocked the request (CORS).`);
+        }
+        throw new Error(`${error.message || "Failed to communicate with Tavily"}`);
+    }
 };
 
 const sendMessageToOpenAICompatible = async (
@@ -309,6 +507,7 @@ const sendMessageToOpenAICompatible = async (
         const decoder = new TextDecoder();
         let buffer = '';
         let fullText = '';
+        let fullThinking = '';
         
         while (true) {
             const { done, value } = await reader.read();
@@ -325,15 +524,23 @@ const sendMessageToOpenAICompatible = async (
 
                 try {
                     const json = JSON.parse(trimmed.slice(6));
-                    const content = json.choices[0]?.delta?.content || '';
+                    const delta = json.choices[0]?.delta;
+                    const content = delta?.content || '';
+                    const reasoning = delta?.reasoning_content || delta?.reasoning || '';
+
+                    if (reasoning) {
+                        fullThinking += reasoning;
+                        if (onUpdate) onUpdate(fullText, fullThinking);
+                    }
+
                     if (content) {
                         fullText += content;
-                        if (onUpdate) onUpdate(fullText);
+                        if (onUpdate) onUpdate(fullText, fullThinking || undefined);
                     }
                 } catch (e) {}
             }
         }
-        return { text: fullText };
+        return { text: fullText, thoughtProcess: fullThinking || undefined };
     } catch (error: any) {
         if (error.name === 'AbortError') return { text: "[Stopped by user]" };
         console.error(`${trimmedModel} API Error:`, error);
