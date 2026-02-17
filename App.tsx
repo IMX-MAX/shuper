@@ -111,7 +111,7 @@ function useStickyState<T>(defaultValue: T, key: string, debounceMs: number = 0)
         window.localStorage.setItem(key, JSON.stringify(value));
       } catch (e) {
         if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-          console.error("Storage limit reached. Older history might not be saved.");
+          console.warn("Storage limit reached. Older history might not be saved.");
         }
       }
     };
@@ -253,7 +253,7 @@ interface NavigationState {
   sessionId?: string;
 }
 
-const App: React.FC = () => {
+export const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('chat');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
@@ -295,6 +295,15 @@ const App: React.FC = () => {
 
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'chat' | 'agent', id: string, title: string } | null>(null);
   const abortControllers = useRef<Record<string, AbortController>>({});
+
+  // Disable Browser Context Menu Globally
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    document.addEventListener('contextmenu', handleContextMenu);
+    return () => document.removeEventListener('contextmenu', handleContextMenu);
+  }, []);
 
   const hasAnyKey = useMemo(() => {
     return !!(process.env.API_KEY || settings.apiKeys.gemini || settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt || settings.apiKeys.routeway);
@@ -680,6 +689,17 @@ const App: React.FC = () => {
         if (agent) {
             baseInst = `${agent.systemInstruction}\n\nUser Context: ${settings.baseKnowledge}`;
             actualModel = agent.baseModel;
+            
+            // Inject Connected Tools Context
+            if (agent.tools && agent.tools.length > 0) {
+                const toolDescriptions = agent.tools.map(t => {
+                    if (t.type === 'mcp') return `- MCP Server: ${t.config} (Connected)`;
+                    if (t.type === 'api_linear') return `- Linear API Integration (Connected via Key)`;
+                    return `- ${t.name}: ${t.config}`;
+                }).join('\n');
+                
+                baseInst += `\n\nCONNECTED CAPABILITIES:\nYou have been connected to the following external tools and APIs:\n${toolDescriptions}\n\nWhen the user asks to interact with these services (e.g. "Create a linear issue", "Read craft doc"), assume you have the capability to do so via function calling or context retrieval.`;
+            }
         }
 
         const systemInstruction = `${baseInst}\n\n${getSystemInstruction(settings.userName, mode, availableLabels)}`;
@@ -1116,5 +1136,3 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-export default App;

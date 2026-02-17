@@ -3,7 +3,7 @@ import React from 'react';
 
 export type SessionStatus = 'backlog' | 'todo' | 'in_progress' | 'needs_review' | 'done' | 'cancelled' | 'archive';
 export type SessionMode = 'explore' | 'execute' | 'council';
-export type ColorTheme = 'Default' | 'Catppuccin' | 'Dracula' | 'Ghostty' | 'GitHub' | 'Gruvbox' | 'Haze' | 'Tokyo Night' | 'Solarized' | 'Rose Pine' | 'AAITN' | 'One Dark Pro' | 'Pierre' | 'Nord';
+export type ColorTheme = 'Default' | 'Catppuccin' | 'Dracula' | 'Ghostty' | 'GitHub' | 'Gruvbox' | 'Haze' | 'Tokyo Night' | 'Solarized' | 'Rose Pine' | 'AAITN' | 'One Dark Pro' | 'Pierre' | 'Nord' | 'Retina' | 'Nerf Gun' | 'Nightfall' | 'City' | 'Yogurt' | 'Appwrite';
 export type FontFamily = 'Inter' | 'System';
 
 export interface Label {
@@ -52,6 +52,14 @@ export interface Session {
   councilModels?: string[];
 }
 
+export interface AgentTool {
+  id: string;
+  type: 'mcp' | 'api_linear' | 'api_github' | 'api_custom';
+  name: string;
+  config: string; // URL or API Key
+  active: boolean;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -59,6 +67,7 @@ export interface Agent {
   systemInstruction: string;
   description?: string;
   icon?: string; // base64 string for custom agent icon
+  tools?: AgentTool[];
 }
 
 export interface UserSettings {
