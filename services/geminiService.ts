@@ -99,6 +99,33 @@ export const sendMessageToGemini = async (
 ): Promise<{ text: string; thoughtProcess?: string }> => {
   
   const trimmedModel = modelName.trim();
+
+  // PRE-PROCESS ATTACHMENTS FOR ALL PROVIDERS
+  // This ensures text files are seen by OpenRouter/Routeway/Gemini equally.
+  let finalMessage = message;
+  const geminiParts: any[] = [];
+  
+  attachments.forEach(att => {
+      const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
+      
+      if (att.type.startsWith('text/')) {
+          try {
+              // Decode base64 to text and append to the message prompt
+              const textContent = decodeURIComponent(escape(atob(base64Data)));
+              finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[File: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
+          } catch (e) {
+              console.error("Error decoding text attachment", e);
+          }
+      } else {
+          // For images/PDFs, only used for Gemini parts currently
+          geminiParts.push({
+              inlineData: {
+                  mimeType: att.type,
+                  data: base64Data
+              }
+          });
+      }
+  });
   
   // Check if model is in the Routeway list.
   const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
@@ -119,7 +146,7 @@ export const sendMessageToGemini = async (
 
   if (isOpenRouter || isRouteway) {
       return sendMessageToOpenAICompatible(
-          message, 
+          finalMessage, // Pass the processed message containing text attachments
           history, 
           updatedSystemInstruction, 
           useThinking, 
@@ -136,34 +163,8 @@ export const sendMessageToGemini = async (
   const ai = new GoogleGenAI({ apiKey: geminiKey });
   
   try {
-    let finalMessage = message;
-    const currentParts: any[] = [];
-    
-    // Process attachments first to append text ones to message
-    attachments.forEach(att => {
-        const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
-        
-        if (att.type.startsWith('text/')) {
-            try {
-                // Decode base64 to text and append to the message prompt
-                const textContent = decodeURIComponent(escape(atob(base64Data)));
-                finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[File: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
-            } catch (e) {
-                console.error("Error decoding text attachment", e);
-            }
-        } else {
-            // For images/PDFs, use inlineData
-            currentParts.push({
-                inlineData: {
-                    mimeType: att.type,
-                    data: base64Data
-                }
-            });
-        }
-    });
-
-    if (finalMessage && finalMessage.trim()) currentParts.push({ text: finalMessage });
-    else if (currentParts.length === 0) currentParts.push({ text: " " });
+    if (finalMessage && finalMessage.trim()) geminiParts.push({ text: finalMessage });
+    else if (geminiParts.length === 0) geminiParts.push({ text: " " });
 
     const config: any = {
         systemInstruction: updatedSystemInstruction.trim() || undefined,
@@ -182,7 +183,7 @@ export const sendMessageToGemini = async (
 
     const responseStream = await ai.models.generateContentStream({
       model: finalModel,
-      contents: [...history, { role: 'user', parts: currentParts }],
+      contents: [...history, { role: 'user', parts: geminiParts }],
       config: config,
       signal
     });
