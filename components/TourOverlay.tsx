@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronRight, ChevronLeft, X, Rocket, Zap, Sparkles, Settings, MessageSquare, Target, PlusCircle, ListTodo, Key, Cpu } from 'lucide-react';
+import { ChevronRight, ChevronLeft, X, Rocket, Zap, Sparkles, Settings, MessageSquare, Target, PlusCircle, ListTodo, Key, Cpu, Globe } from 'lucide-react';
 
 interface TourStep {
   id: string;
@@ -40,6 +40,13 @@ const TOUR_STEPS: TourStep[] = [
     icon: Cpu
   },
   {
+    id: 'search',
+    targetId: 'tour-web-search',
+    title: 'Web Search',
+    description: 'Enable real-time web access. Toggle search on/off and switch between providers like Scira, Exa, or Tavily.',
+    icon: Globe
+  },
+  {
     id: 'settings',
     targetId: 'tour-settings',
     title: 'Connecting AI',
@@ -62,7 +69,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({ onComplete, onSkip, on
 
   useEffect(() => {
     // Ensure the app is in a state where elements exist
-    if ((currentStep.id === 'mode' || currentStep.id === 'models') && onNewSession) {
+    if ((currentStep.id === 'mode' || currentStep.id === 'models' || currentStep.id === 'search') && onNewSession) {
         const hasSessions = document.querySelector('[data-session-id]');
         if (!hasSessions) {
             onNewSession();

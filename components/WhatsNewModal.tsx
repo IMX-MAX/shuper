@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Check, RefreshCcw, Layout, MessageSquare, Tag, Camera, Sparkles, Bot, Plug, FileCode } from 'lucide-react';
+import { X, Check, RefreshCcw, Layout, MessageSquare, Tag, Camera, Sparkles, Bot, Plug, FileCode, Globe } from 'lucide-react';
 
 interface WhatsNewModalProps {
   isOpen: boolean;
@@ -21,7 +21,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
              </div>
              <div>
                 <h2 className="text-xl font-bold text-[var(--text-main)]">Latest Build</h2>
-                <p className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest">Version 2.5.0</p>
+                <p className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest">Version 2.6.0</p>
              </div>
           </div>
           <button 
@@ -36,13 +36,13 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
           <div className="flex gap-5">
              <div className="flex-shrink-0">
                  <div className="w-10 h-10 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center border border-[var(--border)] shadow-sm">
-                     <Bot className="w-5 h-5 text-[#A78BFA]" />
+                     <Globe className="w-5 h-5 text-[#A78BFA]" />
                  </div>
              </div>
              <div>
-                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">Intelligence Factory</h3>
+                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">Tavily Search Integration</h3>
                  <p className="text-xs text-[var(--text-muted)] leading-relaxed font-medium">
-                     A completely redesigned Agents view. Create, manage, and tune your assistants in a powerful split-pane editor.
+                     Now you can choose Tavily as a search provider alongside Scira and Exa. Add your API key in Settings > AI.
                  </p>
              </div>
           </div>
@@ -64,13 +64,13 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
           <div className="flex gap-5">
              <div className="flex-shrink-0">
                  <div className="w-10 h-10 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center border border-[var(--border)] shadow-sm">
-                     <FileCode className="w-5 h-5 text-[var(--accent)]" />
+                     <Bot className="w-5 h-5 text-[var(--accent)]" />
                  </div>
              </div>
              <div>
-                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">System Instructions</h3>
+                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">Intelligence Factory</h3>
                  <p className="text-xs text-[var(--text-muted)] leading-relaxed font-medium">
-                     Enhanced editor for defining agent behavior with a focused, distraction-free writing environment.
+                     A completely redesigned Agents view. Create, manage, and tune your assistants in a powerful split-pane editor.
                  </p>
              </div>
           </div>

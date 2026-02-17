@@ -31,7 +31,7 @@ import {
   PanelRight, 
   Circle, 
   Tag, 
-  Users,
+  Users, 
   FileText,
   X 
 } from 'lucide-react';
@@ -51,7 +51,7 @@ import { LabelSelector } from './LabelSelector';
 interface ChatInterfaceProps {
   session: Session;
   messages: Message[];
-  onSendMessage: (text: string, attachments: Attachment[], useThinking: boolean, mode: SessionMode, existingId?: string) => void;
+  onSendMessage: (text: string, attachments: Attachment[], useThinking: boolean, mode: SessionMode, useSearch: boolean, searchProvider: 'scira' | 'exa' | 'tavily', existingId?: string) => void;
   onStopGeneration: () => void;
   isLoading: boolean;
   onUpdateStatus: (status: SessionStatus) => void;
@@ -73,6 +73,9 @@ interface ChatInterfaceProps {
   onNewSession: () => void;
   hasOpenRouterKey?: boolean;
   hasRoutewayKey?: boolean;
+  hasSciraKey?: boolean;
+  hasExaKey?: boolean;
+  hasTavilyKey?: boolean;
   onBackToList?: () => void;
   onOpenSidebar?: () => void;
   hasAnyKey?: boolean;
@@ -89,24 +92,21 @@ const WaveLoader = () => (
   </div>
 );
 
-const ThinkingBlock = ({ steps, thoughtProcess, isGenerating }: { steps: string[], thoughtProcess?: string, isGenerating?: boolean }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [lastStepsCount, setLastStepsCount] = useState(0);
+const ThinkingBlock = ({ steps, thoughtProcess, isGenerating, defaultExpanded }: { steps: string[], thoughtProcess?: string, isGenerating?: boolean, defaultExpanded?: boolean }) => {
+    const [isExpanded, setIsExpanded] = useState(defaultExpanded || false);
 
+    // Update expanded state if defaultExpanded prop changes significantly (e.g. from false to true when processing finishes)
     useEffect(() => {
-        if (isGenerating && (steps.length > lastStepsCount || thoughtProcess)) {
-            setIsExpanded(true);
-            setLastStepsCount(steps.length);
-        }
-    }, [isGenerating, steps.length, lastStepsCount, thoughtProcess]);
+        if (defaultExpanded) setIsExpanded(true);
+    }, [defaultExpanded]);
 
     if (steps.length === 0 && !isGenerating && !thoughtProcess) return null;
 
     return (
-        <div className="mb-6 animate-in fade-in slide-in-from-top-1 duration-500">
+        <div className="mb-4 animate-in fade-in slide-in-from-top-1 duration-500">
             <button 
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="flex items-center gap-3 text-[11px] font-bold text-[var(--text-dim)] tracking-widest hover:text-[var(--text-muted)] transition-all mb-4 group"
+                className="flex items-center gap-3 text-[11px] font-bold text-[var(--text-dim)] tracking-widest hover:text-[var(--text-muted)] transition-all mb-1 group"
             >
                 <div className={`p-1 rounded-md border border-[var(--border)] transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
                     <ChevronDown className="w-3 h-3" />
@@ -114,11 +114,17 @@ const ThinkingBlock = ({ steps, thoughtProcess, isGenerating }: { steps: string[
                 <span>{isGenerating ? 'Analyzing Requirements' : (thoughtProcess ? 'View Chain of Thought' : `Steps taken (${steps.length})`)}</span>
             </button>
             
+            {!isExpanded && isGenerating && (
+                <div className="ml-1 mb-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                    <WaveLoader />
+                </div>
+            )}
+            
             <div className={`overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
                 <div className="relative ml-2.5 pl-6 border-l-2 border-[var(--text-muted)]/30 space-y-5 py-2">
                     {thoughtProcess && (
                         <div className="text-[14px] text-[var(--text-muted)] leading-relaxed italic opacity-80 whitespace-pre-wrap font-medium pb-4 border-b border-[var(--border)]">
-                            {thoughtProcess}
+                            <Markdown>{thoughtProcess}</Markdown>
                         </div>
                     )}
                     {steps.map((step, idx) => (
@@ -177,7 +183,22 @@ const MemoizedMessage = memo(({ msg, index, isGenerating, sessionMode, onCopyTex
     };
 
     const { planSteps, mainContent } = processModelOutput(msg.content, sessionMode);
-    const showInitialLoader = isGenerating && planSteps.length === 0 && !mainContent && !msg.thoughtProcess;
+    
+    // Determine if ThinkingBlock should be displayed
+    const showThinkingBlock = sessionMode === 'execute' || !!msg.thoughtProcess;
+
+    // Determine if we should show the initial loader.
+    // Show only if:
+    // 1. We are generating
+    // 2. We have no content to show yet
+    // 3. We are NOT showing the ThinkingBlock (which has its own loader)
+    const showInitialLoader = isGenerating && !mainContent && !showThinkingBlock;
+    
+    // Automatically expand thinking if:
+    // 1. It is NOT generating anymore
+    // 2. We have a thought process
+    // 3. We DO NOT have main content (e.g. search only response)
+    const shouldExpandThinking = !isGenerating && !!msg.thoughtProcess && !mainContent;
 
     return (
         <div key={msg.id} className={`flex flex-col gap-4 ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-message`}>
@@ -211,8 +232,13 @@ const MemoizedMessage = memo(({ msg, index, isGenerating, sessionMode, onCopyTex
                             </span>
                         </div>
                     )}
-                    {(sessionMode === 'execute' || msg.thoughtProcess || isGenerating) && (
-                        <ThinkingBlock steps={planSteps} thoughtProcess={msg.thoughtProcess} isGenerating={isGenerating} />
+                    {showThinkingBlock && (
+                        <ThinkingBlock 
+                            steps={planSteps} 
+                            thoughtProcess={msg.thoughtProcess} 
+                            isGenerating={isGenerating} 
+                            defaultExpanded={shouldExpandThinking}
+                        />
                     )}
                     {mainContent && (
                         <div className="markdown-body transition-opacity duration-300 overflow-x-auto font-medium">
@@ -305,7 +331,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     session, messages, onSendMessage, onStopGeneration, isLoading, onUpdateStatus,
     availableLabels, onUpdateLabels, onCreateLabel, onDeleteSession, onRenameSession,
     onUpdateMode, onUpdateCouncilModels, onChangeView, onNewSession, visibleModels, agents, currentModel, onSelectModel,
-    sendKey, onRegenerateTitle, onToggleFlag, hasOpenRouterKey, hasRoutewayKey,
+    sendKey, onRegenerateTitle, onToggleFlag, hasOpenRouterKey, hasRoutewayKey, hasSciraKey, hasExaKey, hasTavilyKey,
     onBackToList, onOpenSidebar, hasAnyKey, userSettings, draftValue, onDraftChange,
     isEditingTitle = false, setIsEditingTitle = (_val: boolean) => {}
 }) => {
@@ -465,8 +491,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 z-30 flex justify-center">
              <InputArea 
-                  onSend={(text, atts, thinking, mode) => {
-                      onSendMessage(text, atts, thinking, mode, editingMessageId || undefined);
+                  onSend={(text, atts, thinking, mode, useSearch, searchProvider) => {
+                      onSendMessage(text, atts, thinking, mode, useSearch, searchProvider, editingMessageId || undefined);
                       setEditingMessageId(null);
                       setEditContent('');
                   }}
@@ -485,6 +511,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   sendKey={sendKey}
                   hasOpenRouterKey={hasOpenRouterKey}
                   hasRoutewayKey={hasRoutewayKey}
+                  hasSciraKey={hasSciraKey}
+                  hasExaKey={hasExaKey}
+                  hasTavilyKey={hasTavilyKey}
                   hasAnyKey={hasAnyKey}
                   currentMode={session.mode || 'explore'}
                   onUpdateMode={onUpdateMode}

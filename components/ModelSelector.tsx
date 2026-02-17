@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Check, Bot, Sparkles, Network, Moon, Hexagon, Zap, Settings, ChevronRight } from 'lucide-react';
+import { Check, Bot, Sparkles, Network, Moon, Hexagon, Zap, Settings, ChevronRight, Search } from 'lucide-react';
 import { Agent, OPENROUTER_FREE_MODELS, GEMINI_MODELS, ROUTEWAY_MODELS, MODEL_FRIENDLY_NAMES } from '../types';
 
 interface ModelSelectorProps {
@@ -12,6 +12,7 @@ interface ModelSelectorProps {
   agents: Agent[];
   hasOpenRouterKey?: boolean;
   hasRoutewayKey?: boolean;
+  hasSciraKey?: boolean;
   onOpenSettings?: () => void;
 }
 

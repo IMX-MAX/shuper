@@ -21,14 +21,15 @@ import {
   PenLine,
   Database,
   AppWindow,
-  FileText
+  FileText,
+  Globe
 } from 'lucide-react';
 import { Attachment, Agent, Label, SessionStatus, SessionMode, GEMINI_MODELS, OPENROUTER_FREE_MODELS, ROUTEWAY_MODELS, MODEL_FRIENDLY_NAMES } from '../types';
 import { ModelSelector } from './ModelSelector';
 import { StatusSelector, STATUS_CONFIG } from './StatusSelector';
 
 interface InputAreaProps {
-  onSend: (text: string, attachments: Attachment[], useThinking: boolean, mode: SessionMode) => void;
+  onSend: (text: string, attachments: Attachment[], useThinking: boolean, mode: SessionMode, useSearch: boolean, searchProvider: 'scira' | 'exa' | 'tavily') => void;
   onStop?: () => void;
   isLoading: boolean;
   currentStatus: SessionStatus;
@@ -44,6 +45,9 @@ interface InputAreaProps {
   sendKey: 'Enter' | 'Ctrl+Enter';
   hasOpenRouterKey?: boolean;
   hasRoutewayKey?: boolean;
+  hasSciraKey?: boolean;
+  hasExaKey?: boolean;
+  hasTavilyKey?: boolean;
   currentMode: SessionMode;
   onUpdateMode: (mode: SessionMode) => void;
   onUpdateCouncilModels?: (models: string[]) => void;
@@ -74,6 +78,9 @@ export const InputArea: React.FC<InputAreaProps> = ({
     sendKey,
     hasOpenRouterKey,
     hasRoutewayKey,
+    hasSciraKey,
+    hasExaKey,
+    hasTavilyKey,
     currentMode,
     onUpdateMode,
     onUpdateCouncilModels,
@@ -89,7 +96,23 @@ export const InputArea: React.FC<InputAreaProps> = ({
 }) => {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [localText, setLocalText] = useState(draftValue);
+  const [useSearch, setUseSearch] = useState(false);
+  const [searchProvider, setSearchProvider] = useState<'scira' | 'exa' | 'tavily'>('scira');
   
+  // Auto-select valid provider if current one is missing key
+  useEffect(() => {
+      if (searchProvider === 'scira' && !hasSciraKey) {
+          if (hasExaKey) setSearchProvider('exa');
+          else if (hasTavilyKey) setSearchProvider('tavily');
+      } else if (searchProvider === 'exa' && !hasExaKey) {
+          if (hasSciraKey) setSearchProvider('scira');
+          else if (hasTavilyKey) setSearchProvider('tavily');
+      } else if (searchProvider === 'tavily' && !hasTavilyKey) {
+          if (hasSciraKey) setSearchProvider('scira');
+          else if (hasExaKey) setSearchProvider('exa');
+      }
+  }, [hasSciraKey, hasExaKey, hasTavilyKey, searchProvider]);
+
   const lastSyncedDraft = useRef(draftValue);
   const localTextRef = useRef(localText);
   const onDraftChangeRef = useRef(onDraftChange);
@@ -98,6 +121,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [isCouncilPickerOpen, setIsCouncilPickerOpen] = useState(false);
+  const [isSearchMenuOpen, setIsSearchMenuOpen] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -239,12 +263,13 @@ export const InputArea: React.FC<InputAreaProps> = ({
       if (!localText.trim() && attachments.length === 0) return;
       
       const textToSend = localText;
-      onSend(textToSend, attachments, currentMode === 'execute', currentMode);
+      onSend(textToSend, attachments, currentMode === 'execute', currentMode, useSearch, searchProvider);
       
       setLocalText('');
       lastSyncedDraft.current = '';
       onDraftChange('');
       setAttachments([]);
+      // Keep search state active until manually toggled off
       
       if (textareaRef.current) {
           textareaRef.current.style.height = '64px';
@@ -314,6 +339,8 @@ export const InputArea: React.FC<InputAreaProps> = ({
 
   const ModeIcon = currentMode === 'explore' ? Compass : (currentMode === 'execute' ? RefreshCcw : Users);
   const StatusIcon = STATUS_CONFIG[currentStatus].icon;
+
+  const hasSearchKey = hasSciraKey || hasExaKey || hasTavilyKey;
 
   return (
     <div id="tour-input-area" className="w-full max-w-3xl floating-input-shadow rounded-3xl bg-[var(--input-bg)] border border-[var(--border)] overflow-visible relative flex flex-col">
@@ -416,7 +443,61 @@ export const InputArea: React.FC<InputAreaProps> = ({
                   onChange={handleFileSelect} 
                   accept="application/pdf,image/jpeg,image/png,image/webp,text/plain"
               />
-              <button onClick={() => fileInputRef.current?.click()} className="text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"><Paperclip className="w-5 h-5" /></button>
+              <button 
+                onClick={() => fileInputRef.current?.click()} 
+                className="text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"
+                title="Attach file"
+              >
+                <Paperclip className="w-5 h-5" />
+              </button>
+              
+              {/* Search Toggle with Provider Menu */}
+              <div id="tour-web-search" className="relative flex items-center gap-1">
+                  <button 
+                    onClick={() => hasSearchKey && setUseSearch(!useSearch)}
+                    disabled={!hasSearchKey}
+                    className={`transition-all duration-300 flex items-center gap-1.5 ${useSearch ? 'text-[var(--accent)]' : 'text-[var(--text-dim)] hover:text-[var(--text-main)]'} ${!hasSearchKey ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    title={hasSearchKey ? `Toggle Search (${searchProvider === 'scira' ? 'Scira' : (searchProvider === 'exa' ? 'Exa' : 'Tavily')})` : "Search key required (Settings)"}
+                  >
+                    <Globe className="w-5 h-5" />
+                  </button>
+                  
+                  {/* Allow dropdown if at least TWO providers are available */}
+                  {(Number(!!hasSciraKey) + Number(!!hasExaKey) + Number(!!hasTavilyKey) >= 2) && (
+                      <button 
+                          onClick={() => setIsSearchMenuOpen(!isSearchMenuOpen)}
+                          className="text-[var(--text-dim)] hover:text-[var(--text-main)] p-0.5 rounded transition-colors"
+                      >
+                          <ChevronDown className="w-3 h-3" />
+                      </button>
+                  )}
+
+                  {isSearchMenuOpen && (
+                      <>
+                          <div className="fixed inset-0 z-40" onClick={() => setIsSearchMenuOpen(false)} />
+                          <div className="absolute bottom-full left-0 mb-2 w-32 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-xl py-1 z-50 animate-in zoom-in-95 origin-bottom-left">
+                              {hasSciraKey && (
+                                <div onClick={() => { setSearchProvider('scira'); setIsSearchMenuOpen(false); }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${searchProvider === 'scira' ? 'bg-[var(--bg-elevated)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}>
+                                    <Globe className="w-3.5 h-3.5" />
+                                    <span className="text-[11px] font-bold">Scira</span>
+                                </div>
+                              )}
+                              {hasExaKey && (
+                                <div onClick={() => { setSearchProvider('exa'); setIsSearchMenuOpen(false); }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${searchProvider === 'exa' ? 'bg-[var(--bg-elevated)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}>
+                                    <Globe className="w-3.5 h-3.5" />
+                                    <span className="text-[11px] font-bold">Exa</span>
+                                </div>
+                              )}
+                              {hasTavilyKey && (
+                                <div onClick={() => { setSearchProvider('tavily'); setIsSearchMenuOpen(false); }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${searchProvider === 'tavily' ? 'bg-[var(--bg-elevated)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}>
+                                    <Globe className="w-3.5 h-3.5" />
+                                    <span className="text-[11px] font-bold">Tavily</span>
+                                </div>
+                              )}
+                          </div>
+                      </>
+                  )}
+              </div>
           </div>
           
           <div className="flex items-center gap-4">
@@ -453,7 +534,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
                           </>
                       )
                   ) : (
-                      <ModelSelector isOpen={isModelMenuOpen} onClose={() => setIsModelMenuOpen(false)} currentModel={currentModel} onSelect={onSelectModel} visibleModels={visibleModels} agents={agents} hasOpenRouterKey={hasOpenRouterKey} hasRoutewayKey={hasRoutewayKey} onOpenSettings={onOpenSettings} />
+                      <ModelSelector isOpen={isModelMenuOpen} onClose={() => setIsModelMenuOpen(false)} currentModel={currentModel} onSelect={onSelectModel} visibleModels={visibleModels} agents={agents} hasOpenRouterKey={hasOpenRouterKey} hasRoutewayKey={hasRoutewayKey} hasSciraKey={hasSciraKey} onOpenSettings={onOpenSettings} />
                   )}
               </div>
               

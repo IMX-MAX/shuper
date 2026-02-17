@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UserSettings, Label, GEMINI_MODELS, OPENROUTER_FREE_MODELS, ROUTEWAY_MODELS, ColorTheme, FontFamily, Session, Message, Agent } from '../types';
+import { UserSettings, Label, GEMINI_MODELS, OPENROUTER_FREE_MODELS, ROUTEWAY_MODELS, SCIRA_MODELS, ColorTheme, FontFamily, Session, Message, Agent } from '../types';
 import { 
   Monitor, 
   Palette, 
@@ -33,7 +33,10 @@ import {
   Layout,
   Sparkles,
   Download,
-  Upload
+  Upload,
+  Globe,
+  Network,
+  Cpu
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -72,7 +75,7 @@ const ApiKeyInput = ({
             </div>
             <div className="relative flex items-center group">
                 <div className="absolute left-3 text-[var(--text-dim)] group-focus-within:text-[var(--text-muted)] transition-colors">
-                    <Shield className="w-3.5 h-3.5" />
+                    <Key className="w-3.5 h-3.5" />
                 </div>
                 <input 
                     type={isVisible ? "text" : "password"} 
@@ -301,7 +304,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     </div>
   );
 
-  const allModels = [...GEMINI_MODELS, ...OPENROUTER_FREE_MODELS, ...ROUTEWAY_MODELS];
+  const allModels = [...GEMINI_MODELS, ...OPENROUTER_FREE_MODELS, ...ROUTEWAY_MODELS, ...SCIRA_MODELS];
 
   return (
     <div className="flex-1 flex h-full bg-[var(--bg-primary)] text-[var(--text-main)] font-inter relative">
@@ -352,6 +355,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               {activeTab === 'general' && (
                   <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
+                      {/* ... General Settings ... */}
                       <div className="island-card border border-[var(--border)] rounded-3xl p-6 md:p-8 space-y-8 shadow-sm bg-[var(--bg-secondary)]">
                           <div className="flex items-center gap-6">
                               <div className="relative group">
@@ -459,12 +463,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               {activeTab === 'ai' && (
                   <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
                       <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-3xl p-6 md:p-8 space-y-8 shadow-sm island-card">
-                          <h3 className="font-bold text-lg tracking-tight text-[var(--text-main)]">API Keys</h3>
-                          <div className="space-y-6">
-                              <ApiKeyInput label="Google Gemini" value={settings.apiKeys.gemini} onChange={(v) => updateApiKey('gemini', v)} placeholder="AIzaSy..." />
-                              <ApiKeyInput label="Routeway.ai" value={settings.apiKeys.routeway} onChange={(v) => updateApiKey('routeway', v)} placeholder="sk-rw-..." />
-                              <ApiKeyInput label="OpenRouter" value={settings.apiKeys.openRouter} onChange={(v) => updateApiKey('openRouter', v)} placeholder="sk-or-v1-..." />
-                              <ApiKeyInput label="OpenRouter (Secondary)" value={settings.apiKeys.openRouterAlt} onChange={(v) => updateApiKey('openRouterAlt', v)} placeholder="sk-or-v1-..." description="Backup key when quota exceeded" />
+                          <h3 className="font-bold text-lg tracking-tight text-[var(--text-main)]">API Configuration</h3>
+                          <div className="space-y-8">
+                              {/* Primary */}
+                              <div>
+                                  <div className="flex items-center gap-2 mb-3">
+                                      <Sparkles className="w-3.5 h-3.5 text-[#3B82F6]" />
+                                      <h4 className="text-[11px] font-bold text-[var(--text-dim)] uppercase tracking-widest">Core Provider</h4>
+                                  </div>
+                                  <ApiKeyInput label="Google Gemini" value={settings.apiKeys.gemini} onChange={(v) => updateApiKey('gemini', v)} placeholder="AIzaSy..." />
+                              </div>
+
+                              {/* Search */}
+                              <div>
+                                  <div className="flex items-center gap-2 mb-3">
+                                      <Globe className="w-3.5 h-3.5 text-[#A78BFA]" />
+                                      <h4 className="text-[11px] font-bold text-[var(--text-dim)] uppercase tracking-widest">Web Search</h4>
+                                  </div>
+                                  <div className="grid grid-cols-1 gap-4">
+                                      <ApiKeyInput label="Scira Search" value={settings.apiKeys.scira} onChange={(v) => updateApiKey('scira', v)} placeholder="sk-..." description="Real-time web search" />
+                                      <ApiKeyInput label="Exa Search" value={settings.apiKeys.exa} onChange={(v) => updateApiKey('exa', v)} placeholder="Exa API Key..." description="Neural web search alternative" />
+                                      <ApiKeyInput label="Tavily Search" value={settings.apiKeys.tavily} onChange={(v) => updateApiKey('tavily', v)} placeholder="tvly-..." description="Search engine for LLM agents" />
+                                  </div>
+                              </div>
+
+                              {/* Third Party */}
+                              <div>
+                                  <div className="flex items-center gap-2 mb-3">
+                                      <Network className="w-3.5 h-3.5 text-[#10B981]" />
+                                      <h4 className="text-[11px] font-bold text-[var(--text-dim)] uppercase tracking-widest">External Models</h4>
+                                  </div>
+                                  <div className="space-y-4">
+                                      <ApiKeyInput label="Routeway.ai" value={settings.apiKeys.routeway} onChange={(v) => updateApiKey('routeway', v)} placeholder="sk-rw-..." />
+                                      <ApiKeyInput label="OpenRouter" value={settings.apiKeys.openRouter} onChange={(v) => updateApiKey('openRouter', v)} placeholder="sk-or-v1-..." />
+                                      <ApiKeyInput label="OpenRouter (Secondary)" value={settings.apiKeys.openRouterAlt} onChange={(v) => updateApiKey('openRouterAlt', v)} placeholder="sk-or-v1-..." description="Backup key when quota exceeded" />
+                                  </div>
+                              </div>
                           </div>
                       </div>
 
@@ -516,6 +550,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
               )}
 
+              {/* ... other tabs ... */}
               {activeTab === 'instructions' && (
                   <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
                       <div className="island-card border border-[var(--border)] rounded-3xl p-6 md:p-8 space-y-6 shadow-sm bg-[var(--bg-secondary)]">
