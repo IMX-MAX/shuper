@@ -1,0 +1,15 @@
+# Wrangler configuration for deploying the Shuper API proxy worker
+# See: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "shuper-api-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Route configuration — adjust to match your domain setup
+# Option A: As a route on your existing domain (recommended)
+# [routes]
+# pattern = "shuperapp.nafen.sbs/api/*"
+# zone_name = "nafen.sbs"
+
+# Option B: As a workers.dev subdomain (for testing)
+# workers_dev = true
