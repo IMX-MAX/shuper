@@ -42,7 +42,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
              <div>
                  <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">Tavily Search Integration</h3>
                  <p className="text-xs text-[var(--text-muted)] leading-relaxed font-medium">
-                     Now you can choose Tavily as a search provider alongside Scira and Exa. Add your API key in Settings > AI.
+                     Now you can choose Tavily as a search provider alongside Scira and Exa. Add your API key in Settings &gt; AI.
                  </p>
              </div>
           </div>
