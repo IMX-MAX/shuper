@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { X, Check, RefreshCcw, Layout, MessageSquare, Tag, Camera, Sparkles, Bot, Plug, FileCode, Globe } from 'lucide-react';
 
