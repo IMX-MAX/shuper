@@ -62,7 +62,6 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({ onComplete, onSkip, on
 
   useEffect(() => {
     // Ensure the app is in a state where elements exist
-    // Only call onNewSession if we actually need a session for the tour step and don't have one
     if ((currentStep.id === 'mode' || currentStep.id === 'models') && onNewSession) {
         const hasSessions = document.querySelector('[data-session-id]');
         if (!hasSessions) {
@@ -85,6 +84,8 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({ onComplete, onSkip, on
 
     const timer = setInterval(updateHighlight, 100);
     window.addEventListener('resize', updateHighlight);
+    updateHighlight();
+    
     return () => {
       clearInterval(timer);
       window.removeEventListener('resize', updateHighlight);
@@ -107,7 +108,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({ onComplete, onSkip, on
 
   const spotlightStyle = useMemo(() => {
     if (!highlightRect) return { display: 'none' };
-    const padding = 12;
+    const padding = 8;
     return {
       top: highlightRect.top - padding,
       left: highlightRect.left - padding,
@@ -121,9 +122,9 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({ onComplete, onSkip, on
       return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
     }
 
-    const margin = 24;
-    const cardWidth = 320;
-    const cardHeight = 220; 
+    const margin = 20;
+    const cardWidth = 340; // Updated width to match new design
+    const cardHeight = 240; 
     const screenWidth = window.innerWidth;
     const screenHeight = window.innerHeight;
 
@@ -134,6 +135,9 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({ onComplete, onSkip, on
     if (top + cardHeight > screenHeight - margin) {
       top = highlightRect.top - cardHeight - margin;
     }
+    
+    // Safety check for top edge
+    if (top < margin) top = margin;
 
     // Keep card on screen horizontally
     const halfWidth = cardWidth / 2;
@@ -144,69 +148,78 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({ onComplete, onSkip, on
     }
 
     return { 
-        top: `${Math.max(margin, top)}px`, 
+        top: `${top}px`, 
         left: `${left}px`, 
         transform: 'translateX(-50%)',
     };
   }, [highlightRect]);
 
   return (
-    <div className="fixed inset-0 z-[200] overflow-hidden pointer-events-auto">
+    <div className="fixed inset-0 z-[200] overflow-hidden pointer-events-auto font-inter">
       <div 
-        className="absolute inset-0 bg-black/70 backdrop-blur-[2px] transition-all duration-500"
+        className="absolute inset-0 bg-black/60 backdrop-blur-[2px] transition-all duration-500"
         style={{
           clipPath: highlightRect 
-            ? `polygon(0% 0%, 0% 100%, ${highlightRect.left - 12}px 100%, ${highlightRect.left - 12}px ${highlightRect.top - 12}px, ${highlightRect.right + 12}px ${highlightRect.top - 12}px, ${highlightRect.right + 12}px ${highlightRect.bottom + 12}px, ${highlightRect.left - 12}px ${highlightRect.bottom + 12}px, ${highlightRect.left - 12}px 100%, 100% 100%, 100% 0%)`
+            ? `polygon(0% 0%, 0% 100%, ${highlightRect.left - 8}px 100%, ${highlightRect.left - 8}px ${highlightRect.top - 8}px, ${highlightRect.right + 8}px ${highlightRect.top - 8}px, ${highlightRect.right + 8}px ${highlightRect.bottom + 8}px, ${highlightRect.left - 8}px ${highlightRect.bottom + 8}px, ${highlightRect.left - 8}px 100%, 100% 100%, 100% 0%)`
             : 'none'
         }}
       />
 
       {highlightRect && (
         <div 
-          className="absolute border-2 border-white/40 rounded-2xl shadow-[0_0_50px_rgba(255,255,255,0.15)] transition-all duration-500 pointer-events-none"
+          className="absolute border-2 border-white/20 rounded-2xl shadow-[0_0_0_4px_rgba(255,255,255,0.05)] transition-all duration-300 pointer-events-none"
           style={spotlightStyle}
         />
       )}
 
+      {/* Positioning Container */}
       <div 
-        className="absolute w-[320px] bg-[var(--bg-secondary)] border border-[var(--border)] rounded-3xl p-6 shadow-2xl transition-all duration-300 animate-fly-in-up"
+        className="absolute w-[340px] max-w-[calc(100vw-32px)] transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]"
         style={cardPosition}
       >
-        <button 
-          onClick={onSkip}
-          className="absolute top-4 right-4 text-[var(--text-dim)] hover:text-white"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        {/* Animated Card Content */}
+        <div className="bg-[#121212] border border-[#2A2A2A] rounded-2xl shadow-2xl p-6 animate-fly-in-up">
+            <div className="flex items-start gap-4 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-[#1E1E1E] border border-[#333] flex items-center justify-center flex-shrink-0 text-white shadow-inner">
+                {React.createElement(currentStep.icon, { className: "w-5 h-5" })}
+            </div>
+            <div className="pt-0.5">
+                <h3 className="font-bold text-white text-[16px] leading-tight mb-1">{currentStep.title}</h3>
+                <p className="text-[10px] font-bold text-[#525252] tracking-[0.15em] uppercase">{currentStepIndex + 1} OF {TOUR_STEPS.length}</p>
+            </div>
+            </div>
 
-        <div className="flex items-center gap-4 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-            {React.createElement(currentStep.icon, { className: "w-5 h-5 text-white" })}
-          </div>
-          <div>
-            <h3 className="font-bold text-white text-base">{currentStep.title}</h3>
-            <p className="text-[10px] text-[var(--text-dim)] uppercase font-bold">{currentStepIndex + 1} of {TOUR_STEPS.length}</p>
-          </div>
-        </div>
+            <p className="text-[13px] text-[#A1A1A1] leading-relaxed mb-8 font-medium">
+            {currentStep.description}
+            </p>
 
-        <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-6">
-          {currentStep.description}
-        </p>
-
-        <div className="flex items-center justify-between mt-auto">
-          <button onClick={onSkip} className="text-xs font-bold text-[var(--text-dim)] hover:text-white uppercase">Skip</button>
-          <div className="flex gap-2">
-            {currentStepIndex > 0 && (
-                <button onClick={handleBack} className="p-2 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl text-white transition-colors hover:bg-[var(--border)]"><ChevronLeft className="w-4 h-4" /></button>
-            )}
+            <div className="flex items-center justify-between">
             <button 
-              onClick={handleNext}
-              className="px-5 py-2.5 bg-white text-black font-bold rounded-xl hover:opacity-90 flex items-center gap-2 text-sm transition-all active:scale-95"
+                onClick={onSkip} 
+                className="text-[11px] font-bold text-[#525252] hover:text-[#A1A1A1] uppercase tracking-wider transition-colors py-2"
             >
-              {currentStepIndex === TOUR_STEPS.length - 1 ? 'Finish' : 'Next'}
-              <ChevronRight className="w-4 h-4" />
+                Skip
             </button>
-          </div>
+            
+            <div className="flex items-center gap-3">
+                {currentStepIndex > 0 && (
+                    <button 
+                        onClick={handleBack} 
+                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2A2A2A] text-[#737373] hover:text-white transition-colors"
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                    </button>
+                )}
+                
+                <button 
+                onClick={handleNext}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-lg text-[11px] font-bold uppercase tracking-wide hover:bg-[#E5E5E5] transition-all active:scale-95 shadow-lg"
+                >
+                <span>{currentStepIndex === TOUR_STEPS.length - 1 ? 'Finish' : 'Next'}</span>
+                <ChevronRight className="w-3 h-3" strokeWidth={3} />
+                </button>
+            </div>
+            </div>
         </div>
       </div>
     </div>

@@ -139,7 +139,8 @@ const ThemePicker = ({ current, onSelect, onClose }: { current: ColorTheme, onSe
     const [search, setSearch] = useState('');
     const themes: ColorTheme[] = [
         'Default', 'Catppuccin', 'Dracula', 'Ghostty', 'GitHub', 'Gruvbox', 'Haze',
-        'Tokyo Night', 'Solarized', 'Rose Pine', 'AAITN', 'One Dark Pro', 'Pierre', 'Nord'
+        'Tokyo Night', 'Solarized', 'Rose Pine', 'AAITN', 'One Dark Pro', 'Pierre', 'Nord',
+        'Retina', 'Nerf Gun', 'Nightfall', 'City', 'Yogurt', 'Appwrite'
     ];
     const filtered = themes.filter(t => t.toLowerCase().includes(search.toLowerCase()));
 

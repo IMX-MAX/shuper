@@ -31,7 +31,9 @@ import {
   PanelRight, 
   Circle, 
   Tag, 
-  Users 
+  Users,
+  FileText,
+  X 
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -146,9 +148,10 @@ interface MemoizedMessageProps {
     onCopyText: (text: string, id: string) => void;
     onMessageContextMenu: (e: React.MouseEvent, msgId: string) => void;
     copiedId: string | null;
+    onOpenFile: (attachment: Attachment) => void;
 }
 
-const MemoizedMessage = memo(({ msg, index, isGenerating, sessionMode, onCopyText, onMessageContextMenu, copiedId }: MemoizedMessageProps) => {
+const MemoizedMessage = memo(({ msg, index, isGenerating, sessionMode, onCopyText, onMessageContextMenu, copiedId, onOpenFile }: MemoizedMessageProps) => {
     const processModelOutput = (content: string, mode: SessionMode) => {
         const lines = content.split('\n');
         const planSteps: string[] = [];
@@ -183,8 +186,14 @@ const MemoizedMessage = memo(({ msg, index, isGenerating, sessionMode, onCopyTex
                     {msg.attachments && msg.attachments.length > 0 && (
                         <div className="flex flex-wrap gap-2 justify-end">
                             {msg.attachments.map((att, i) => (
-                                <div key={i} className="bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl p-2.5 text-xs flex items-center gap-2.5 text-[var(--text-main)] shadow-sm font-bold">
-                                    <div className="w-5 h-5 flex items-center justify-center bg-[var(--text-main)]/10 text-[var(--text-main)] rounded-lg">📎</div>
+                                <div 
+                                    key={i} 
+                                    onClick={() => { if(att.type.startsWith('text/')) onOpenFile(att); }}
+                                    className={`bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl p-2.5 text-xs flex items-center gap-2.5 text-[var(--text-main)] shadow-sm font-bold ${att.type.startsWith('text/') ? 'cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors' : ''}`}
+                                >
+                                    <div className="w-5 h-5 flex items-center justify-center bg-[var(--text-main)]/10 text-[var(--text-main)] rounded-lg">
+                                        {att.type.startsWith('text/') ? <FileText className="w-3 h-3" /> : '📎'}
+                                    </div>
                                     <span className="truncate max-w-[120px]">{att.name}</span>
                                 </div>
                             ))}
@@ -249,13 +258,8 @@ const MemoizedMessage = memo(({ msg, index, isGenerating, sessionMode, onCopyTex
     );
 });
 
-/**
- * MessageHistoryMemo is the critical performance component. 
- * It will NOT re-render when draftValue changes, ensuring typing 
- * is always 60fps even in long conversations.
- */
 const MessageHistoryMemo = memo(({ 
-    messages, isLoading, sessionMode, onCopyText, onMessageContextMenu, copiedId, scrollRef, hasAnyKey 
+    messages, isLoading, sessionMode, onCopyText, onMessageContextMenu, copiedId, scrollRef, hasAnyKey, onOpenFile
 }: { 
     messages: Message[], 
     isLoading: boolean, 
@@ -264,7 +268,8 @@ const MessageHistoryMemo = memo(({
     onMessageContextMenu: (e: React.MouseEvent, id: string) => void,
     copiedId: string | null,
     scrollRef: React.RefObject<HTMLDivElement | null>,
-    hasAnyKey: boolean
+    hasAnyKey: boolean,
+    onOpenFile: (att: Attachment) => void
 }) => {
     return (
         <div className="flex-1 overflow-y-auto px-4 pt-20 pb-52 custom-scrollbar" ref={scrollRef}>
@@ -280,6 +285,7 @@ const MessageHistoryMemo = memo(({
                         onCopyText={onCopyText}
                         onMessageContextMenu={onMessageContextMenu}
                         copiedId={copiedId}
+                        onOpenFile={onOpenFile}
                       />
                   ))}
               </div>
@@ -287,7 +293,6 @@ const MessageHistoryMemo = memo(({
         </div>
     );
 }, (prev, next) => {
-    // Only re-render if messages change OR loading state changes OR copiedId changes
     return (
         prev.messages === next.messages && 
         prev.isLoading === next.isLoading && 
@@ -313,6 +318,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [editedTitle, setEditedTitle] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState<string>('');
+  const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -368,6 +374,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       });
   };
 
+  const getAttachmentContent = (att: Attachment) => {
+      try {
+          const base64 = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
+          return decodeURIComponent(escape(atob(base64)));
+      } catch (e) {
+          return "Error decoding file content.";
+      }
+  };
+
   const activeAgent = agents.find(a => a.id === currentModel);
 
   return (
@@ -410,6 +425,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             copiedId={copiedId}
             scrollRef={scrollRef}
             hasAnyKey={!!hasAnyKey}
+            onOpenFile={setViewingAttachment}
         />
 
         {messageContextMenu && (
@@ -420,6 +436,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     <div onClick={() => { handleCopyText(messages.find(m => m.id === messageContextMenu.messageId)?.content || '', messageContextMenu.messageId); setMessageContextMenu(null); }} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] text-[#A1A1A1] hover:text-white cursor-pointer rounded-lg mx-1"><Copy className="w-3.5 h-3.5" /><span>Copy</span></div>
                 </div>
             </>
+        )}
+
+        {viewingAttachment && (
+            <div className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setViewingAttachment(null)}>
+                <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-[var(--bg-elevated)] rounded-lg">
+                                <FileText className="w-5 h-5 text-[var(--accent)]" />
+                            </div>
+                            <span className="font-bold text-[var(--text-main)]">{viewingAttachment.name}</span>
+                        </div>
+                        <button onClick={() => setViewingAttachment(null)} className="p-2 hover:bg-[var(--bg-elevated)] rounded-lg text-[var(--text-dim)] hover:text-[var(--text-main)]">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-[var(--bg-primary)] rounded-b-2xl">
+                        <div className="markdown-body text-sm text-[var(--text-main)]">
+                            <Markdown remarkPlugins={[remarkGfm]}>{getAttachmentContent(viewingAttachment)}</Markdown>
+                        </div>
+                    </div>
+                </div>
+            </div>
         )}
 
         <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[var(--bg-tertiary)] via-[var(--bg-tertiary)]/80 to-transparent pointer-events-none z-20" />

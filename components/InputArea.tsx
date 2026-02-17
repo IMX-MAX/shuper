@@ -20,7 +20,8 @@ import {
   BookOpen, 
   PenLine,
   Database,
-  AppWindow
+  AppWindow,
+  FileText
 } from 'lucide-react';
 import { Attachment, Agent, Label, SessionStatus, SessionMode, GEMINI_MODELS, OPENROUTER_FREE_MODELS, ROUTEWAY_MODELS, MODEL_FRIENDLY_NAMES } from '../types';
 import { ModelSelector } from './ModelSelector';
@@ -90,6 +91,8 @@ export const InputArea: React.FC<InputAreaProps> = ({
   const [localText, setLocalText] = useState(draftValue);
   
   const lastSyncedDraft = useRef(draftValue);
+  const localTextRef = useRef(localText);
+  const onDraftChangeRef = useRef(onDraftChange);
   
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
@@ -100,10 +103,16 @@ export const InputArea: React.FC<InputAreaProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const statusBtnRef = useRef<HTMLButtonElement>(null);
 
+  // Keep refs up to date for cleanup
+  useEffect(() => { localTextRef.current = localText; }, [localText]);
+  useEffect(() => { onDraftChangeRef.current = onDraftChange; }, [onDraftChange]);
+
+  // Handle external draft updates (switching sessions)
   useEffect(() => {
     if (draftValue !== lastSyncedDraft.current) {
         setLocalText(draftValue);
         lastSyncedDraft.current = draftValue;
+        localTextRef.current = draftValue;
     }
   }, [draftValue]);
 
@@ -129,6 +138,15 @@ export const InputArea: React.FC<InputAreaProps> = ({
     }, 1000);
     return () => clearTimeout(handler);
   }, [localText, onDraftChange]);
+
+  // Flush unsaved draft changes on unmount
+  useEffect(() => {
+      return () => {
+          if (localTextRef.current !== lastSyncedDraft.current) {
+              onDraftChangeRef.current(localTextRef.current);
+          }
+      };
+  }, []);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -190,6 +208,26 @@ export const InputArea: React.FC<InputAreaProps> = ({
             handleSend();
         }
     }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+      const pastedText = e.clipboardData.getData('text');
+      if (pastedText && pastedText.length > 250) {
+          e.preventDefault();
+          const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/:/g, '-');
+          const fileName = `Snippet ${timestamp}.txt`;
+          
+          // Safe Base64 encoding for UTF-8 strings
+          const base64Data = btoa(unescape(encodeURIComponent(pastedText)));
+          const dataUrl = `data:text/plain;base64,${base64Data}`;
+          
+          setAttachments(prev => [...prev, {
+              name: fileName,
+              type: 'text/plain',
+              data: dataUrl,
+              size: new Blob([pastedText]).size
+          }]);
+      }
   };
 
   const handleSend = () => {
@@ -341,7 +379,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
               {attachments.map((att, index) => (
                   <div key={index} className="flex items-center gap-2 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-[11px] text-[var(--text-main)] flex-shrink-0 animate-in zoom-in-95 duration-200">
                       <div className="w-4 h-4 bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center rounded">
-                          <Paperclip className="w-2.5 h-2.5" />
+                          {att.type.startsWith('text/') ? <FileText className="w-2.5 h-2.5" /> : <Paperclip className="w-2.5 h-2.5" />}
                       </div>
                       <span className="truncate max-w-[120px] font-medium">{att.name}</span>
                       <button 
@@ -361,6 +399,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
           value={localText}
           onChange={(e) => setLocalText(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={isLoading ? "Working..." : "Ask anything..."}
           className="w-full bg-transparent border-0 text-[var(--text-main)] placeholder-[var(--text-dim)] px-0 py-0 focus:ring-0 focus:outline-none resize-none min-h-[64px] max-h-[240px] custom-scrollbar text-[13px] leading-relaxed font-medium overflow-hidden transition-all duration-200 ease-out"
           rows={1}

@@ -1,7 +1,7 @@
 
-import React, { useState, useRef } from 'react';
-import { Agent, GEMINI_MODELS, OPENROUTER_FREE_MODELS, ROUTEWAY_MODELS, MODEL_FRIENDLY_NAMES } from '../types';
-import { Plus, Bot, ChevronRight, Save, Trash2, Edit2, Copy, ChevronDown, ArrowRight, History, Camera, Image as ImageIcon, X, Sparkles, Network, Hexagon, Moon } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Agent, GEMINI_MODELS, OPENROUTER_FREE_MODELS, ROUTEWAY_MODELS, MODEL_FRIENDLY_NAMES, AgentTool } from '../types';
+import { Plus, Bot, ChevronRight, Save, Trash2, Edit2, Copy, ChevronDown, ArrowRight, ArrowUp, History, Camera, Image as ImageIcon, X, Sparkles, Network, Hexagon, Moon, Link as LinkIcon, Globe, Box, Key, Plug, Folder, Command } from 'lucide-react';
 
 interface AgentsViewProps {
   agents: Agent[];
@@ -18,40 +18,47 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ agents, onCreateAgent, o
   
   // Form State
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [baseModel, setBaseModel] = useState('gemini-3-flash-preview');
   const [instructions, setInstructions] = useState('');
   const [icon, setIcon] = useState<string | undefined>(undefined);
+  const [tools, setTools] = useState<AgentTool[]>([]);
+
+  // Tool State
+  const [isToolMenuOpen, setIsToolMenuOpen] = useState(false);
+  const [newToolInput, setNewToolInput] = useState('');
+  const [newToolType, setNewToolType] = useState<AgentTool['type']>('mcp');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
     setName('');
+    setDescription('');
     setInstructions('');
     setBaseModel('gemini-3-flash-preview');
     setIcon(undefined);
+    setTools([]);
     setIsEditing(false);
     setEditingAgent(null);
   };
 
   const handleCreateOrUpdate = () => {
-      if (instructions.trim()) {
-          const finalName = name.trim() || (editingAgent ? editingAgent.name : "New agent");
+      if (name.trim()) {
+          const finalName = name.trim();
+          const newAgent: Agent = {
+              id: editingAgent ? editingAgent.id : Date.now().toString(),
+              name: finalName,
+              baseModel,
+              systemInstruction: instructions.trim(),
+              description: description.trim(),
+              icon,
+              tools
+          };
+
           if (editingAgent) {
-              onUpdateAgent({
-                  ...editingAgent,
-                  name: finalName,
-                  baseModel,
-                  systemInstruction: instructions.trim(),
-                  icon
-              });
+              onUpdateAgent(newAgent);
           } else {
-              onCreateAgent({
-                  id: Date.now().toString(),
-                  name: finalName,
-                  baseModel,
-                  systemInstruction: instructions.trim(),
-                  icon
-              });
+              onCreateAgent(newAgent);
           }
           resetForm();
       }
@@ -60,9 +67,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ agents, onCreateAgent, o
   const handleEdit = (agent: Agent) => {
       setEditingAgent(agent);
       setName(agent.name);
+      setDescription(agent.description || '');
       setBaseModel(agent.baseModel);
       setInstructions(agent.systemInstruction);
       setIcon(agent.icon);
+      setTools(agent.tools || []);
       setIsEditing(true);
       setAgentContextMenu(null);
   };
@@ -84,161 +93,264 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ agents, onCreateAgent, o
     }
   };
 
+  const addTool = () => {
+      if (newToolInput.trim()) {
+          const newTool: AgentTool = {
+              id: Date.now().toString(),
+              type: newToolType,
+              name: newToolType === 'api_linear' ? 'Linear' : newToolType === 'mcp' ? 'MCP Server' : 'Custom API',
+              config: newToolInput.trim(),
+              active: true
+          };
+          setTools([...tools, newTool]);
+          setNewToolInput('');
+          setIsToolMenuOpen(false);
+      }
+  };
+
+  const removeTool = (id: string) => {
+      setTools(tools.filter(t => t.id !== id));
+  };
+
   const getModelLabel = (m: string) => {
       return MODEL_FRIENDLY_NAMES[m] || (m.includes('/') ? m.split('/')[1].split(':')[0] : m);
   };
 
   return (
     <div className="flex-1 h-full bg-[var(--bg-primary)] text-[var(--text-main)] font-inter select-none overflow-hidden flex flex-col relative">
-      {/* Header */}
-      <div className="h-16 flex items-center justify-between px-8 border-b border-[var(--border)] shrink-0 bg-[var(--bg-primary)]/80 backdrop-blur-md z-10">
-          <h1 className="text-xl font-bold tracking-tight">Intelligence Factory</h1>
-          {isEditing && (
-              <button 
-                onClick={resetForm}
-                className="text-xs font-bold text-[var(--text-dim)] hover:text-[var(--text-main)] uppercase tracking-wider"
-              >
-                  Close Editor
-              </button>
-          )}
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
-          {isEditing ? (
-              <div className="max-w-3xl mx-auto animate-in fade-in zoom-in-95 duration-300">
-                  <div className="mb-8 flex items-center gap-6">
-                      <div className="relative group/icon flex-shrink-0">
-                          <div 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="w-20 h-20 rounded-[24px] bg-[var(--bg-elevated)] border border-[var(--border)] flex items-center justify-center cursor-pointer overflow-hidden transition-all group-hover/icon:border-[var(--text-muted)] shadow-lg"
-                          >
-                              {icon ? (
-                                <img src={icon} className="w-full h-full object-cover" alt="" />
-                              ) : (
-                                <Bot className="w-8 h-8 text-[var(--text-dim)]" />
-                              )}
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/icon:opacity-100 flex items-center justify-center transition-opacity">
-                                  <Camera className="w-6 h-6 text-white" />
-                              </div>
-                          </div>
-                          <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleIconUpload} />
-                      </div>
-                      
-                      <div className="flex-1">
-                          <label className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest mb-1.5 block">Agent Identity</label>
-                          <input 
-                             type="text"
-                             value={name}
-                             onChange={(e) => setName(e.target.value)}
-                             placeholder="Name your agent..."
-                             className="text-3xl font-bold bg-transparent border-none outline-none text-[var(--text-main)] tracking-tight w-full placeholder:text-[var(--text-dim)] focus:ring-0 px-0"
-                             autoFocus
-                          />
-                      </div>
+      
+      {/* Editor View */}
+      {isEditing ? (
+          <div className="flex-1 flex flex-col h-full relative bg-[var(--bg-primary)] animate-in fade-in zoom-in-95 duration-200">
+              {/* Top Navigation */}
+              <div className="absolute top-6 left-6 right-6 flex justify-between items-start z-20">
+                  <div 
+                    onClick={resetForm}
+                    className="w-10 h-10 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)] flex items-center justify-center text-[var(--text-dim)] hover:text-[var(--text-main)] cursor-pointer transition-colors"
+                  >
+                      <ChevronDown className="w-5 h-5 rotate-90" />
                   </div>
+                  
+                  <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-[var(--bg-elevated)] border border-[var(--border)] flex items-center justify-center shadow-sm">
+                          {icon ? <img src={icon} className="w-full h-full object-cover" /> : <Bot className="w-5 h-5 text-[var(--text-dim)]" />}
+                      </div>
+                      <div onClick={() => fileInputRef.current?.click()} className="w-8 h-8 rounded-full bg-[var(--bg-elevated)] flex items-center justify-center cursor-pointer hover:bg-[var(--bg-tertiary)] border border-[var(--border)] shadow-sm">
+                          <Plus className="w-4 h-4 text-[var(--text-dim)]" />
+                      </div>
+                      <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleIconUpload} />
+                  </div>
+              </div>
 
-                  <div className="space-y-6">
-                      <div className="relative bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-[24px] overflow-visible shadow-sm">
-                          <div className="absolute top-4 left-6 text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest pointer-events-none">System Prompt</div>
-                          <textarea 
-                             value={instructions}
-                             onChange={(e) => {
-                               setInstructions(e.target.value);
-                               e.target.style.height = 'auto';
-                               e.target.style.height = Math.max(140, e.target.scrollHeight) + 'px';
-                             }}
-                             placeholder="Define the agent's personality, skills, and constraints..."
-                             className="w-full min-h-[140px] bg-transparent pt-10 px-6 pb-20 text-[16px] text-[var(--text-main)] placeholder-[var(--text-dim)]/60 focus:outline-none resize-none leading-relaxed font-medium"
-                          />
-                          
-                          <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg-tertiary)]/50 backdrop-blur-sm rounded-b-[24px]">
+              {/* Center Content */}
+              <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto w-full px-6 -mt-10">
+                  <input 
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Agent Name"
+                      className="text-4xl md:text-5xl font-bold bg-transparent border-none text-center outline-none text-[var(--text-main)] placeholder-[var(--text-dim)]/50 w-full mb-4 tracking-tight"
+                      autoFocus
+                  />
+                  <input 
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Short description or role..."
+                      className="text-lg bg-transparent border-none text-center outline-none text-[var(--text-muted)] placeholder-[var(--text-dim)]/50 w-full max-w-lg font-medium"
+                  />
+
+                  {/* Connected Tools Pills */}
+                  {tools.length > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-center mt-8 max-w-lg">
+                          {tools.map(tool => (
+                              <div key={tool.id} className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-full text-xs font-medium text-[var(--text-main)] animate-in fade-in zoom-in-95 shadow-sm">
+                                  {tool.type === 'mcp' && <Globe className="w-3 h-3 text-orange-400" />}
+                                  {tool.type === 'api_linear' && <Hexagon className="w-3 h-3 text-blue-400" />}
+                                  {tool.type === 'api_custom' && <Plug className="w-3 h-3 text-green-400" />}
+                                  <span className="truncate max-w-[150px]">{tool.type === 'api_linear' ? 'Linear' : tool.config}</span>
+                                  <button onClick={() => removeTool(tool.id)} className="hover:text-red-400 ml-1"><X className="w-3 h-3" /></button>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+              </div>
+
+              {/* Bottom Input Bar */}
+              <div className="w-full max-w-3xl mx-auto px-6 pb-8 md:pb-12 z-20">
+                  <div className="relative bg-[var(--bg-elevated)] border border-[var(--border)] rounded-[2rem] p-2 flex flex-col shadow-2xl transition-all hover:border-[var(--text-dim)]">
+                      {/* Tool & Attachment Menu */}
+                      {isToolMenuOpen && (
+                          <div className="absolute bottom-full left-0 mb-3 ml-2 w-72 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl shadow-xl p-4 animate-in fade-in slide-in-from-bottom-2 z-50">
+                              <div className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest mb-3">Connect Integration</div>
+                              <div className="space-y-2 mb-3">
+                                  <button onClick={() => setNewToolType('mcp')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all ${newToolType === 'mcp' ? 'bg-[var(--accent)] text-[var(--bg-primary)]' : 'hover:bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+                                      <Globe className="w-4 h-4" /> MCP Server
+                                  </button>
+                                  <button onClick={() => setNewToolType('api_linear')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all ${newToolType === 'api_linear' ? 'bg-[var(--accent)] text-[var(--bg-primary)]' : 'hover:bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+                                      <Hexagon className="w-4 h-4" /> Linear
+                                  </button>
+                              </div>
+                              <input 
+                                  value={newToolInput}
+                                  onChange={(e) => setNewToolInput(e.target.value)}
+                                  placeholder={newToolType === 'mcp' ? "Server URL..." : "API Key..."}
+                                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--text-main)] mb-3 focus:outline-none"
+                              />
+                              <button 
+                                  onClick={addTool}
+                                  disabled={!newToolInput.trim()}
+                                  className="w-full py-2 bg-[var(--text-main)] text-[var(--bg-primary)] rounded-lg text-xs font-bold disabled:opacity-50"
+                              >
+                                  Add Connection
+                              </button>
+                          </div>
+                      )}
+
+                      <textarea 
+                          value={instructions}
+                          onChange={(e) => setInstructions(e.target.value)}
+                          placeholder="System instructions & behavior..."
+                          className="w-full bg-transparent border-none text-[var(--text-main)] placeholder-[var(--text-dim)] px-4 py-3 min-h-[56px] max-h-[200px] resize-none focus:outline-none text-[15px] font-medium custom-scrollbar"
+                          style={{ height: '56px' }}
+                          onInput={(e) => {
+                              e.currentTarget.style.height = 'auto';
+                              e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
+                          }}
+                      />
+
+                      <div className="flex items-center justify-between px-2 pb-1">
+                          <button 
+                              onClick={() => setIsToolMenuOpen(!isToolMenuOpen)}
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-main)] transition-colors group"
+                              title="Add Tool"
+                          >
+                              <Plug className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                          </button>
+
+                          <div className="flex items-center gap-3">
                               <div className="relative">
                                   <button 
-                                    onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-                                    className="flex items-center gap-2 text-[12px] font-bold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors py-2 px-3 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)] uppercase tracking-wide"
+                                      onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+                                      className="flex items-center gap-2 text-xs font-bold text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors py-1.5 px-3 rounded-lg hover:bg-[var(--bg-tertiary)]"
                                   >
-                                      <span>{getModelLabel(baseModel)}</span>
+                                      {getModelLabel(baseModel)}
                                       <ChevronDown className="w-3 h-3 opacity-50" />
                                   </button>
-                                  
                                   {isModelMenuOpen && (
-                                      <div className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 overflow-y-auto max-h-[300px] custom-scrollbar">
-                                          <div className="px-4 py-1.5 text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider sticky top-0 bg-[var(--bg-elevated)]">Gemini</div>
+                                      <div className="absolute bottom-full right-0 mb-2 w-56 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-2xl py-1 z-50 max-h-60 overflow-y-auto custom-scrollbar animate-in zoom-in-95 origin-bottom-right">
                                           {GEMINI_MODELS.map(m => (
-                                              <div key={m} onClick={() => { setBaseModel(m); setIsModelMenuOpen(false); }} className="px-4 py-2 hover:bg-[var(--bg-secondary)] text-[12px] cursor-pointer">{getModelLabel(m)}</div>
+                                              <div key={m} onClick={() => { setBaseModel(m); setIsModelMenuOpen(false); }} className="px-3 py-2 hover:bg-[var(--bg-elevated)] text-xs cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-main)] truncate">
+                                                  {getModelLabel(m)}
+                                              </div>
                                           ))}
-                                          <div className="px-4 py-1.5 text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider sticky top-0 bg-[var(--bg-elevated)] mt-2">Routeway.ai</div>
+                                          <div className="h-[1px] bg-[var(--border)] my-1" />
                                           {ROUTEWAY_MODELS.map(m => (
-                                              <div key={m} onClick={() => { setBaseModel(m); setIsModelMenuOpen(false); }} className="px-4 py-2 hover:bg-[var(--bg-secondary)] text-[12px] cursor-pointer">{getModelLabel(m)}</div>
-                                          ))}
-                                          <div className="px-4 py-1.5 text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider sticky top-0 bg-[var(--bg-elevated)] mt-2">OpenRouter</div>
-                                          {OPENROUTER_FREE_MODELS.map(m => (
-                                              <div key={m} onClick={() => { setBaseModel(m); setIsModelMenuOpen(false); }} className="px-4 py-2 hover:bg-[var(--bg-secondary)] text-[12px] cursor-pointer truncate">{getModelLabel(m)}</div>
+                                              <div key={m} onClick={() => { setBaseModel(m); setIsModelMenuOpen(false); }} className="px-3 py-2 hover:bg-[var(--bg-elevated)] text-xs cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-main)] truncate">
+                                                  {getModelLabel(m)}
+                                              </div>
                                           ))}
                                       </div>
                                   )}
                               </div>
 
                               <button 
-                                 onClick={handleCreateOrUpdate}
-                                 disabled={!instructions.trim()}
-                                 className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-[13px] transition-all ${instructions.trim() ? 'bg-[var(--text-main)] text-[var(--bg-primary)] hover:opacity-90 active:scale-95 shadow-lg' : 'bg-[var(--bg-elevated)] text-[var(--text-dim)] cursor-not-allowed'}`}
+                                  onClick={handleCreateOrUpdate}
+                                  disabled={!name.trim()}
+                                  className="w-8 h-8 rounded-full bg-[var(--text-main)] text-[var(--bg-primary)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 shadow-lg"
                               >
-                                  <span>{editingAgent ? 'Update Agent' : 'Create Agent'}</span>
-                                  <ArrowRight className="w-4 h-4" />
+                                  <ArrowUp className="w-5 h-5" strokeWidth={3} />
                               </button>
                           </div>
                       </div>
                   </div>
               </div>
-          ) : (
-              <div className="max-w-6xl mx-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {/* Create New Card */}
-                      <div 
-                        onClick={() => { resetForm(); setIsEditing(true); }}
-                        className="group relative aspect-[4/3] bg-[var(--bg-secondary)] border border-[var(--border)] hover:border-[var(--text-dim)] rounded-3xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-[var(--bg-elevated)]/50 border-dashed"
-                      >
-                          <div className="w-14 h-14 rounded-full bg-[var(--bg-elevated)] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-sm">
-                              <Plus className="w-6 h-6 text-[var(--text-muted)]" />
-                          </div>
-                          <span className="font-bold text-[var(--text-main)] text-sm">Create New Agent</span>
-                      </div>
+          </div>
+      ) : (
+          /* List View */
+          <>
+            <div className="h-16 flex items-center justify-between px-8 border-b border-[var(--border)] shrink-0 bg-[var(--bg-primary)]/80 backdrop-blur-md z-10">
+                <h1 className="text-xl font-bold tracking-tight">Intelligence Factory</h1>
+                <button 
+                    onClick={() => { resetForm(); setIsEditing(true); }}
+                    className="flex items-center gap-2 bg-[var(--text-main)] text-[var(--bg-primary)] px-4 py-2 rounded-xl text-xs font-bold hover:opacity-90 transition-opacity shadow-lg active:scale-95"
+                >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Agent</span>
+                </button>
+            </div>
 
-                      {/* Agent Cards */}
-                      {agents.map(agent => (
-                          <div 
-                            key={agent.id}
-                            onClick={() => handleEdit(agent)}
-                            onContextMenu={(e) => handleAgentContextMenu(e, agent.id)}
-                            className="group relative aspect-[4/3] bg-[var(--bg-tertiary)] border border-[var(--border)] hover:border-[var(--text-dim)] rounded-3xl p-6 flex flex-col justify-between cursor-pointer transition-all hover:shadow-xl hover:-translate-y-1"
-                          >
-                              <div className="flex justify-between items-start">
-                                  <div className="w-12 h-12 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border)] overflow-hidden">
-                                      {agent.icon ? (
-                                          <img src={agent.icon} className="w-full h-full object-cover" alt="" />
-                                      ) : (
-                                          <div className="w-full h-full flex items-center justify-center"><Bot className="w-6 h-6 text-[var(--text-dim)]" /></div>
-                                      )}
-                                  </div>
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button onClick={(e) => { e.stopPropagation(); onDeleteAgent(agent.id); }} className="p-2 hover:bg-red-500/10 text-[var(--text-dim)] hover:text-red-500 rounded-xl transition-colors">
-                                          <Trash2 className="w-4 h-4" />
-                                      </button>
-                                  </div>
-                              </div>
-                              
-                              <div>
-                                  <h3 className="font-bold text-[15px] text-[var(--text-main)] mb-1 truncate">{agent.name}</h3>
-                                  <p className="text-[11px] font-medium text-[var(--text-dim)] uppercase tracking-wider">{getModelLabel(agent.baseModel)}</p>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          )}
-      </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
+                <div className="max-w-5xl mx-auto pb-20">
+                    <div className="flex flex-col gap-3">
+                        {agents.length === 0 ? (
+                            <div className="text-center py-24 border border-dashed border-[var(--border)] rounded-3xl bg-[var(--bg-secondary)]/30">
+                                <div className="w-20 h-20 bg-[var(--bg-elevated)] rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                                    <Bot className="w-10 h-10 text-[var(--text-dim)]" />
+                                </div>
+                                <h3 className="text-lg font-bold text-[var(--text-main)] mb-2">No agents yet</h3>
+                                <p className="text-sm text-[var(--text-dim)] max-w-sm mx-auto mb-8">Create specialized agents with unique personalities, models, and tool integrations.</p>
+                                <button 
+                                    onClick={() => { resetForm(); setIsEditing(true); }}
+                                    className="inline-flex items-center gap-2 text-sm font-bold text-[var(--accent)] hover:text-[var(--text-main)] transition-colors bg-[var(--bg-elevated)] px-6 py-3 rounded-xl border border-[var(--border)] hover:border-[var(--text-dim)]"
+                                >
+                                    <Plus className="w-4 h-4" /> Create First Agent
+                                </button>
+                            </div>
+                        ) : (
+                            agents.map(agent => (
+                                <div 
+                                    key={agent.id}
+                                    onClick={() => handleEdit(agent)}
+                                    onContextMenu={(e) => handleAgentContextMenu(e, agent.id)}
+                                    className="group relative flex items-center p-4 bg-[var(--bg-secondary)] border border-[var(--border)] hover:border-[var(--text-dim)] rounded-2xl cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.99]"
+                                >
+                                    <div className="flex items-center gap-5 flex-1 min-w-0">
+                                        <div className="w-14 h-14 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border)] overflow-hidden flex-shrink-0 flex items-center justify-center shadow-sm">
+                                            {agent.icon ? (
+                                                <img src={agent.icon} className="w-full h-full object-cover" alt="" />
+                                            ) : (
+                                                <Bot className="w-7 h-7 text-[var(--text-dim)]" />
+                                            )}
+                                        </div>
+                                        
+                                        <div className="flex flex-col gap-1 min-w-0 pr-4">
+                                            <div className="flex items-center gap-3">
+                                                <h3 className="font-bold text-[16px] text-[var(--text-main)] truncate">{agent.name}</h3>
+                                                <span className="text-[10px] font-bold bg-[var(--bg-tertiary)] text-[var(--text-muted)] px-2 py-0.5 rounded border border-[var(--border)] uppercase tracking-wider truncate max-w-[150px]">
+                                                    {getModelLabel(agent.baseModel)}
+                                                </span>
+                                            </div>
+                                            <p className="text-[13px] text-[var(--text-dim)] truncate font-medium group-hover:text-[var(--text-muted)] transition-colors">
+                                                {agent.description || "No description provided."}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 pl-6 border-l border-[var(--border)] ml-2">
+                                        {/* Tool Badge */}
+                                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${agent.tools && agent.tools.length > 0 ? 'bg-[var(--accent)]/10 border-[var(--accent)]/20 text-[var(--accent)]' : 'bg-[var(--bg-elevated)] border-transparent text-[var(--text-dim)]'}`} title={`${agent.tools?.length || 0} tools connected`}>
+                                            <Plug className="w-3.5 h-3.5" />
+                                            <span className="text-xs font-bold">{agent.tools?.length || 0}</span>
+                                        </div>
+
+                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onDeleteAgent(agent.id); }} 
+                                                className="p-2 hover:bg-red-500/10 text-[var(--text-dim)] hover:text-red-500 rounded-xl transition-colors"
+                                                title="Delete Agent"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                            <ChevronRight className="w-5 h-5 text-[var(--text-dim)]" />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+          </>
+      )}
 
       {agentContextMenu && (
           <>
@@ -251,7 +363,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ agents, onCreateAgent, o
                         const agent = agents.find(a => a.id === agentContextMenu.agentId);
                         if (agent) handleEdit(agent);
                     }}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg-secondary)] cursor-pointer"
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg-secondary)] cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-main)]"
                 >
                     <Edit2 className="w-4 h-4" /> Edit
                 </div>
@@ -260,10 +372,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ agents, onCreateAgent, o
                         if (agent) onCreateAgent({...agent, id: Date.now().toString(), name: agent.name + ' (Copy)'});
                         setAgentContextMenu(null);
                     }}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg-secondary)] cursor-pointer"
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg-secondary)] cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-main)]"
                 >
                     <Copy className="w-4 h-4" /> Duplicate
                 </div>
+                <div className="h-[1px] bg-[var(--border)] my-1" />
                 <div onClick={() => { onDeleteAgent(agentContextMenu.agentId); setAgentContextMenu(null); }} className="flex items-center gap-3 px-3 py-2 hover:bg-red-500/10 text-red-400 cursor-pointer">
                     <Trash2 className="w-4 h-4" /> Delete
                 </div>

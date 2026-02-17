@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { X, Check, RefreshCcw, Layout, MessageSquare, Tag, Camera, Sparkles } from 'lucide-react';
+import { X, Check, RefreshCcw, Layout, MessageSquare, Tag, Camera, Sparkles, Bot, Plug, FileCode } from 'lucide-react';
 
 interface WhatsNewModalProps {
   isOpen: boolean;
@@ -20,7 +21,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
              </div>
              <div>
                 <h2 className="text-xl font-bold text-[var(--text-main)]">Latest Build</h2>
-                <p className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest">Version 2.4.0</p>
+                <p className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest">Version 2.5.0</p>
              </div>
           </div>
           <button 
@@ -35,13 +36,13 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
           <div className="flex gap-5">
              <div className="flex-shrink-0">
                  <div className="w-10 h-10 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center border border-[var(--border)] shadow-sm">
-                     <Camera className="w-5 h-5 text-[#A78BFA]" />
+                     <Bot className="w-5 h-5 text-[#A78BFA]" />
                  </div>
              </div>
              <div>
-                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">Custom Branding</h3>
+                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">Intelligence Factory</h3>
                  <p className="text-xs text-[var(--text-muted)] leading-relaxed font-medium">
-                     Upload your own workspace icon in Settings to fully personalize your environment.
+                     A completely redesigned Agents view. Create, manage, and tune your assistants in a powerful split-pane editor.
                  </p>
              </div>
           </div>
@@ -49,13 +50,13 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
           <div className="flex gap-5">
              <div className="flex-shrink-0">
                  <div className="w-10 h-10 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center border border-[var(--border)] shadow-sm">
-                     <Sparkles className="w-5 h-5 text-[#10B981]" />
+                     <Plug className="w-5 h-5 text-[#10B981]" />
                  </div>
              </div>
              <div>
-                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">AI Triage (Labels)</h3>
+                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">Tool Integrations</h3>
                  <p className="text-xs text-[var(--text-muted)] leading-relaxed font-medium">
-                     Let Shuper suggest labels based on your conversation. Just hit 'Suggest with AI' in the tags menu.
+                     Connect your agents to the world. Native support for MCP Servers, Linear, and custom API integrations.
                  </p>
              </div>
           </div>
@@ -63,13 +64,13 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
           <div className="flex gap-5">
              <div className="flex-shrink-0">
                  <div className="w-10 h-10 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center border border-[var(--border)] shadow-sm">
-                     <Layout className="w-5 h-5 text-[var(--accent)]" />
+                     <FileCode className="w-5 h-5 text-[var(--accent)]" />
                  </div>
              </div>
              <div>
-                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">Fluid Sidebar</h3>
+                 <h3 className="text-sm font-bold text-[var(--text-main)] mb-1">System Instructions</h3>
                  <p className="text-xs text-[var(--text-muted)] leading-relaxed font-medium">
-                     New collapsing animations for Status and Labels categories for a cleaner, high-focus workflow.
+                     Enhanced editor for defining agent behavior with a focused, distraction-free writing environment.
                  </p>
              </div>
           </div>
@@ -80,7 +81,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
               onClick={onClose}
               className="w-full py-4 bg-white text-black rounded-2xl text-sm font-bold hover:bg-gray-100 transition-all active:scale-95 shadow-xl shadow-black/20"
            >
-               Synchronize Workspace
+               Got it
            </button>
         </div>
       </div>

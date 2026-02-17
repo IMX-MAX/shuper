@@ -15,7 +15,6 @@ import {
   X,
   ChevronDown,
   Sparkles,
-  // Added missing Bot icon import
   Bot
 } from 'lucide-react';
 import { STATUS_CONFIG } from './StatusSelector';
@@ -124,22 +123,24 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
               <CheckCircle2 className="w-4 h-4" />
               <span>Status</span>
             </div>
-            <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isStatusExpanded ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${isStatusExpanded ? 'rotate-180' : ''}`} />
           </div>
-          {isStatusExpanded && (
-            <div className="ml-4 border-l border-[var(--border)] space-y-0.5 mt-0.5 mb-1">
-              {(Object.keys(STATUS_CONFIG) as SessionStatus[]).filter(s => s !== 'archive').map((status) => (
-                <div 
-                  key={status} 
-                  onClick={() => { onChangeView('chat'); onSetFilter(`status:${status}`); }}
-                  className="flex items-center gap-2.5 px-6 py-1.5 rounded-lg text-[13px] text-[var(--text-dim)] hover:text-[var(--text-main)] cursor-pointer transition-colors"
-                >
-                  <div className={`w-1.5 h-1.5 rounded-full ${STATUS_CONFIG[status].color.replace('text-', 'bg-')}`} />
-                  <span>{STATUS_CONFIG[status].label}</span>
+          <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isStatusExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+            <div className="overflow-hidden">
+                <div className="ml-4 border-l border-[var(--border)] space-y-0.5 mt-0.5 mb-1">
+                  {(Object.keys(STATUS_CONFIG) as SessionStatus[]).filter(s => s !== 'archive').map((status) => (
+                    <div 
+                      key={status} 
+                      onClick={() => { onChangeView('chat'); onSetFilter(`status:${status}`); }}
+                      className="flex items-center gap-2.5 px-6 py-1.5 rounded-lg text-[13px] text-[var(--text-dim)] hover:text-[var(--text-main)] cursor-pointer transition-colors"
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full ${STATUS_CONFIG[status].color.replace('text-', 'bg-')}`} />
+                      <span>{STATUS_CONFIG[status].label}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
             </div>
-          )}
+          </div>
         </div>
 
         <div>
@@ -148,23 +149,25 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
               <Tag className="w-4 h-4" />
               <span>Labels</span>
             </div>
-            <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isLabelsExpanded ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${isLabelsExpanded ? 'rotate-180' : ''}`} />
           </div>
-          {isLabelsExpanded && (
-            <div className="ml-4 border-l border-[var(--border)] space-y-0.5 mt-0.5 mb-1">
-              {availableLabels.map((label) => (
-                <div 
-                  key={label.id} 
-                  onClick={() => { onChangeView('chat'); onSetFilter(`label:${label.id}`); }}
-                  className="flex items-center gap-2.5 px-6 py-1.5 rounded-lg text-[13px] text-[var(--text-dim)] hover:text-[var(--text-main)] cursor-pointer transition-colors"
-                >
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: label.color }} />
-                  <span className="truncate">{label.name}</span>
+          <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isLabelsExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+            <div className="overflow-hidden">
+                <div className="ml-4 border-l border-[var(--border)] space-y-0.5 mt-0.5 mb-1">
+                  {availableLabels.map((label) => (
+                    <div 
+                      key={label.id} 
+                      onClick={() => { onChangeView('chat'); onSetFilter(`label:${label.id}`); }}
+                      className="flex items-center gap-2.5 px-6 py-1.5 rounded-lg text-[13px] text-[var(--text-dim)] hover:text-[var(--text-main)] cursor-pointer transition-colors"
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: label.color }} />
+                      <span className="truncate">{label.name}</span>
+                    </div>
+                  ))}
+                  {availableLabels.length === 0 && <div className="px-6 py-1.5 text-[12px] text-[var(--text-dim)] italic">No labels</div>}
                 </div>
-              ))}
-              {availableLabels.length === 0 && <div className="px-6 py-1.5 text-[12px] text-[var(--text-dim)] italic">No labels</div>}
             </div>
-          )}
+          </div>
         </div>
 
         <div onClick={() => { onChangeView('chat'); onSetFilter('archived'); }} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all ${currentView === 'chat' && currentFilter === 'archived' ? 'bg-[var(--bg-elevated)] text-[var(--text-main)] font-semibold' : 'hover:bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
