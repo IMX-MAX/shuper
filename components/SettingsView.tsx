@@ -143,7 +143,7 @@ const ThemePicker = ({ current, onSelect, onClose }: { current: ColorTheme, onSe
     const themes: ColorTheme[] = [
         'Default', 'Catppuccin', 'Dracula', 'Ghostty', 'GitHub', 'Gruvbox', 'Haze',
         'Tokyo Night', 'Solarized', 'Rose Pine', 'AAITN', 'One Dark Pro', 'Pierre', 'Nord',
-        'Retina', 'Nerf Gun', 'Nightfall', 'City', 'Yogurt', 'Appwrite'
+        'Retina', 'Nerf Gun', 'Nightfall', 'City', 'Yogurt', 'Appwrite', 'Jacob'
     ];
     const filtered = themes.filter(t => t.toLowerCase().includes(search.toLowerCase()));
 
@@ -290,13 +290,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       reader.readAsText(file);
   };
 
+  const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent);
+
   const ShortcutItem = ({ keys, label }: { keys: string[], label: string }) => (
     <div className="flex items-center justify-between p-4 bg-[var(--bg-tertiary)]/50 border border-[var(--border)] rounded-2xl group transition-all hover:border-[var(--text-dim)]">
         <span className="text-[13px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors">{label}</span>
         <div className="flex gap-1.5">
             {keys.map((k, i) => (
                 <React.Fragment key={i}>
-                    <kbd className="min-w-[28px] px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg text-[10px] font-bold text-[var(--text-main)] shadow-sm flex items-center justify-center uppercase tracking-tighter">{k}</kbd>
+                    <kbd className="min-w-[28px] px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg text-[10px] font-bold text-[var(--text-main)] shadow-sm flex items-center justify-center uppercase tracking-tighter">
+                        {k === 'Alt' && isMac ? 'Option' : k}
+                    </kbd>
                     {i < keys.length - 1 && <span className="text-[var(--text-dim)] font-bold self-center text-[10px]">+</span>}
                 </React.Fragment>
             ))}
@@ -586,7 +590,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                   {[
                                       { id: 'Enter', label: 'Enter', subtitle: 'Send on Enter, New line on Shift+Enter' },
-                                      { id: 'Ctrl+Enter', label: 'Ctrl + Enter', subtitle: 'Send on Ctrl+Enter, New line on Enter' }
+                                      { id: 'Ctrl+Enter', label: isMac ? 'Cmd + Enter' : 'Ctrl + Enter', subtitle: isMac ? 'Send on Cmd+Enter, New line on Enter' : 'Send on Ctrl+Enter, New line on Enter' }
                                   ].map(opt => (
                                       <div 
                                         key={opt.id}
