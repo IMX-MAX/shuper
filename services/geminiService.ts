@@ -101,22 +101,18 @@ export const sendMessageToGemini = async (
   const trimmedModel = modelName.trim();
 
   // PRE-PROCESS ATTACHMENTS FOR ALL PROVIDERS
-  // This ensures text files are decoded and visible to the model as part of the prompt.
   let finalMessage = message;
   const geminiParts: any[] = [];
   
   attachments.forEach(att => {
-      // Handle base64 prefix if present
       const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
       
       if (att.type.startsWith('text/') || att.type === 'application/json' || att.type.includes('javascript') || att.type.includes('typescript')) {
           try {
-              // Decode base64 to text and append to the message prompt for optimal model visibility
               const textContent = decodeURIComponent(escape(atob(base64Data)));
               finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[Attachment: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
           } catch (e) {
               console.error("Error decoding text attachment", e);
-              // If decoding fails, fall back to standard attachment (though likely unreadable if binary)
               geminiParts.push({
                   inlineData: {
                       mimeType: att.type,
@@ -125,7 +121,6 @@ export const sendMessageToGemini = async (
               });
           }
       } else {
-          // For images/PDFs, used for Gemini multimodal
           geminiParts.push({
               inlineData: {
                   mimeType: att.type,
@@ -139,19 +134,16 @@ export const sendMessageToGemini = async (
   const actualModel = trimmedModel;
   const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || (trimmedModel.includes(':free') && !isRouteway);
 
-  // Fallback to Pro for execute mode if using Gemini default models
   let finalModel = actualModel;
   if (mode === 'execute' && !isOpenRouter && !isRouteway && !actualModel.includes('gemini-3-pro')) {
       finalModel = 'gemini-3-pro-preview';
   }
 
-  // Prepend context to system instruction
   let updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
 
-  // Route to OpenAI-compatible providers
   if (isOpenRouter || isRouteway) {
       return sendMessageToOpenAICompatible(
-          finalMessage, // Pass the processed message containing text attachments
+          finalMessage, 
           history, 
           updatedSystemInstruction, 
           useThinking, 
@@ -162,14 +154,12 @@ export const sendMessageToGemini = async (
       );
   }
 
-  // Gemini Handler
   const geminiKey = apiKeys?.gemini || process.env.API_KEY;
   if (!geminiKey) return { text: "Missing Gemini API Key. Please add it in Settings." };
 
   const ai = new GoogleGenAI({ apiKey: geminiKey });
   
   try {
-    // Add the final text message part (including attachment text)
     if (finalMessage && finalMessage.trim()) geminiParts.push({ text: finalMessage });
     else if (geminiParts.length === 0) geminiParts.push({ text: " " });
 
@@ -214,7 +204,8 @@ export const sendMessageToGemini = async (
 
 const PROXIES = [
     (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`
+    // Fallback proxy if corsproxy.io is down
+    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
 ];
 
 async function fetchJsonWithRetry(url: string, options: RequestInit, providerName: string): Promise<any> {
@@ -223,7 +214,8 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
         const response = await fetch(url, options);
         if (response.ok) return await response.json();
         
-        // 400/401 usually mean configuration error (key/params), not CORS.
+        // 400/401/403 often mean configuration error or key error, not CORS
+        // But 403 can also be WAF/CORS. We throw to try proxy unless it's strictly 400/401.
         if (response.status === 400 || response.status === 401) {
              const errText = await response.text();
              throw new Error(`${response.status}: ${errText}`);
@@ -235,13 +227,21 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
     }
 
     // 2. Try Proxies
-    // Strip custom headers that might trigger CORS preflight issues on proxies
+    // IMPORTANT: Proxies need to forward our custom headers (x-api-key, etc.)
+    // We strip headers that browsers or proxies might override or reject.
     const proxyHeaders = { ...options.headers } as Record<string, string>;
     delete proxyHeaders['HTTP-Referer'];
     delete proxyHeaders['X-Title'];
     delete proxyHeaders['Origin'];
+    delete proxyHeaders['Referer'];
+    delete proxyHeaders['Host'];
 
-    const proxyOptions = { ...options, headers: proxyHeaders, credentials: 'omit' as RequestCredentials };
+    // Ensure options include the cleaned headers
+    const proxyOptions = { 
+        ...options, 
+        headers: proxyHeaders, 
+        credentials: 'omit' as RequestCredentials 
+    };
 
     let lastError: any;
     for (const proxyGen of PROXIES) {
@@ -256,7 +256,7 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
                     errText = json.error?.message || json.message || errText;
                  } catch {}
                  
-                 // Fatal errors that proxies won't fix
+                 // Fatal errors (Bad Request, Unauthorized) usually mean the API received it but rejected it
                  if (response.status === 400 || response.status === 401) {
                     throw new Error(`API Error ${response.status}: ${errText.slice(0, 100)}`);
                  }
@@ -270,7 +270,7 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
         }
     }
     
-    throw new Error(`${providerName} connection failed. Browser blocked the request (CORS) or proxy is down. Details: ${lastError?.message || 'Unknown'}`);
+    throw new Error(`${providerName} connection failed. Browser blocked request (CORS) or proxy is down. Details: ${lastError?.message || 'Unknown'}`);
 }
 
 /**
@@ -280,12 +280,12 @@ export const searchScira = async (query: string, apiKey: string | undefined): Pr
     if (!apiKey) throw new Error("Scira API Key is missing.");
     const endpoint = 'https://api.scira.ai/api/search';
     
-    // Scira needs Authorization header
+    // Scira uses 'x-api-key' header
     return await fetchJsonWithRetry(endpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey.trim()}`
+            'x-api-key': apiKey.trim()
         },
         body: JSON.stringify({ messages: [{ role: 'user', content: query }] })
     }, 'Scira').then(data => {
@@ -305,7 +305,7 @@ export const searchExa = async (query: string, apiKey: string | undefined): Prom
     if (!apiKey) throw new Error("Exa API Key is missing.");
     const endpoint = 'https://api.exa.ai/search';
 
-    // Exa uses x-api-key header
+    // Exa uses 'x-api-key' header
     return await fetchJsonWithRetry(endpoint, {
         method: 'POST',
         headers: {
@@ -336,7 +336,7 @@ export const searchTavily = async (query: string, apiKey: string | undefined): P
     if (!apiKey) throw new Error("Tavily API Key is missing.");
     const endpoint = 'https://api.tavily.com/search';
     
-    // Tavily accepts api_key in body, which is safer for proxies that might strip Auth headers
+    // Tavily accepts api_key in body, which is safest for proxies
     return await fetchJsonWithRetry(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
