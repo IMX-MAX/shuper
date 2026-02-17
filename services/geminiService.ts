@@ -236,7 +236,8 @@ export const searchScira = async (
                 'HTTP-Referer': window.location.origin,
                 'X-Title': 'Shuper Workspace'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            credentials: 'omit'
         });
 
         if (!response.ok) {
@@ -285,7 +286,6 @@ export const searchExa = async (
     if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
 
     const endpoint = 'https://api.exa.ai/search';
-    // Use proxy for Exa as well to be safe with CORS
     const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
 
     const body = {
@@ -306,14 +306,14 @@ export const searchExa = async (
                 'x-api-key': apiKey.trim(),
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            credentials: 'omit'
         });
 
         if (!response.ok) {
             let errorMsg = `API Error: ${response.status}`;
             try {
                 const errData = await response.json();
-                // Exa errors might look different, capture generic body if prop missing
                 errorMsg += ` - ${JSON.stringify(errData)}`;
             } catch {}
             throw new Error(errorMsg);
@@ -355,63 +355,77 @@ export const searchTavily = async (
     if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
 
     const endpoint = 'https://api.tavily.com/search';
-    // Use proxy for Tavily as well to be safe with CORS
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
+    
+    // We try multiple proxies because Tavily can be picky about CORS/IPs
+    const proxies = [
+        `https://corsproxy.io/?${encodeURIComponent(endpoint)}`,
+        `https://thingproxy.freeboard.io/fetch/${endpoint}`
+    ];
 
     const body = {
-        api_key: apiKey.trim(),
         query: query,
+        topic: "general",
         search_depth: "basic",
         max_results: 5,
         include_answer: true,
         include_raw_content: false
     };
 
-    try {
-        const response = await fetch(proxyUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        });
+    let lastError: any = null;
 
-        if (!response.ok) {
-            let errorMsg = `API Error: ${response.status}`;
-            try {
-                const errData = await response.json();
-                errorMsg += ` - ${JSON.stringify(errData)}`;
-            } catch {}
-            throw new Error(errorMsg);
+    for (const proxyUrl of proxies) {
+        try {
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey.trim()}` // Use Header Auth for better proxy compatibility
+                },
+                body: JSON.stringify(body),
+                credentials: 'omit' // Important for CORS proxies
+            });
+
+            if (!response.ok) {
+                let errorMsg = `API Error: ${response.status}`;
+                try {
+                    const errData = await response.json();
+                    errorMsg += ` - ${JSON.stringify(errData)}`;
+                } catch {}
+                throw new Error(errorMsg);
+            }
+
+            const data = await response.json();
+            let formattedText = "";
+
+            if (data.answer) {
+                formattedText += `**Direct Answer:**\n${data.answer}\n\n---\n`;
+            }
+
+            if (data.results && Array.isArray(data.results)) {
+                formattedText += data.results.map((r: any, i: number) => {
+                    const title = r.title || 'Untitled';
+                    const url = r.url || '#';
+                    const content = r.content || 'No snippet available';
+                    return `**${i + 1}. [${title}](${url})**\n> ${content}\n`;
+                }).join('\n');
+            } else {
+                formattedText += "No detailed results returned from Tavily.";
+            }
+
+            return formattedText;
+
+        } catch (error: any) {
+            console.warn(`Tavily search via ${proxyUrl} failed:`, error);
+            lastError = error;
+            // Continue to next proxy...
         }
-
-        const data = await response.json();
-        let formattedText = "";
-
-        if (data.answer) {
-            formattedText += `**Direct Answer:**\n${data.answer}\n\n---\n`;
-        }
-
-        if (data.results && Array.isArray(data.results)) {
-            formattedText += data.results.map((r: any, i: number) => {
-                const title = r.title || 'Untitled';
-                const url = r.url || '#';
-                const content = r.content || 'No snippet available';
-                return `**${i + 1}. [${title}](${url})**\n> ${content}\n`;
-            }).join('\n');
-        } else {
-            formattedText += "No detailed results returned from Tavily.";
-        }
-
-        return formattedText;
-
-    } catch (error: any) {
-        console.error("Tavily API Error:", error);
-        if (error.message === 'Failed to fetch') {
-            throw new Error(`Unable to connect to Tavily API. The browser blocked the request (CORS).`);
-        }
-        throw new Error(`${error.message || "Failed to communicate with Tavily"}`);
     }
+
+    console.error("All Tavily proxies failed:", lastError);
+    if (lastError?.message === 'Failed to fetch') {
+        throw new Error(`Unable to connect to Tavily API via proxy. The browser blocked the request (CORS).`);
+    }
+    throw new Error(`${lastError?.message || "Failed to communicate with Tavily"}`);
 };
 
 const sendMessageToOpenAICompatible = async (
