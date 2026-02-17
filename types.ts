@@ -3,7 +3,7 @@ import React from 'react';
 
 export type SessionStatus = 'backlog' | 'todo' | 'in_progress' | 'needs_review' | 'done' | 'cancelled' | 'archive';
 export type SessionMode = 'explore' | 'execute' | 'council';
-export type ColorTheme = 'Default' | 'Catppuccin' | 'Dracula' | 'Ghostty' | 'GitHub' | 'Gruvbox' | 'Haze' | 'Tokyo Night' | 'Solarized' | 'Rose Pine' | 'AAITN' | 'One Dark Pro' | 'Pierre' | 'Nord' | 'Retina' | 'Nerf Gun' | 'Nightfall' | 'City' | 'Yogurt' | 'Appwrite';
+export type ColorTheme = 'Default' | 'Catppuccin' | 'Dracula' | 'Ghostty' | 'GitHub' | 'Gruvbox' | 'Haze' | 'Tokyo Night' | 'Solarized' | 'Rose Pine' | 'AAITN' | 'One Dark Pro' | 'Pierre' | 'Nord' | 'Retina' | 'Nerf Gun' | 'Nightfall' | 'City' | 'Yogurt' | 'Appwrite' | 'Jacob';
 export type FontFamily = 'Inter' | 'System';
 
 export interface Label {

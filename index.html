@@ -188,6 +188,18 @@
         --selection-bg: #fd366e; --selection-text: #ffffff;
       }
 
+      /* JACOB (Blue) */
+      body[data-theme="Jacob"]:not(.light-mode) {
+        --bg-primary: #0B1120; --bg-secondary: #151E32; --bg-tertiary: #1E2943; --bg-elevated: #2D3A5C;
+        --border: #2D3A5C; --text-main: #F1F5F9; --text-muted: #94A3B8; --text-dim: #64748B; --accent: #3B82F6; --input-bg: #0B1120;
+        --selection-bg: #3B82F6; --selection-text: #FFFFFF;
+      }
+      body.light-mode[data-theme="Jacob"] {
+        --bg-primary: #F0F9FF; --bg-secondary: #E0F2FE; --bg-tertiary: #BAE6FD; --bg-elevated: #7DD3FC;
+        --border: #BAE6FD; --text-main: #0C4A6E; --text-muted: #0369A1; --text-dim: #0EA5E9; --accent: #0284C7; --input-bg: #F0F9FF;
+        --selection-bg: #0284C7; --selection-text: #FFFFFF;
+      }
+
       /* THEME ENGINE: LIGHT VARIANTS */
       body.light-mode {
         --bg-primary: #ffffff;
