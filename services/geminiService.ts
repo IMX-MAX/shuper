@@ -101,23 +101,31 @@ export const sendMessageToGemini = async (
   const trimmedModel = modelName.trim();
 
   // PRE-PROCESS ATTACHMENTS FOR ALL PROVIDERS
-  // This ensures text files are seen by OpenRouter/Routeway/Gemini equally.
+  // This ensures text files are decoded and visible to the model as part of the prompt.
   let finalMessage = message;
   const geminiParts: any[] = [];
   
   attachments.forEach(att => {
+      // Handle base64 prefix if present
       const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
       
-      if (att.type.startsWith('text/')) {
+      if (att.type.startsWith('text/') || att.type === 'application/json' || att.type.includes('javascript') || att.type.includes('typescript')) {
           try {
-              // Decode base64 to text and append to the message prompt
+              // Decode base64 to text and append to the message prompt for optimal model visibility
               const textContent = decodeURIComponent(escape(atob(base64Data)));
-              finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[File: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
+              finalMessage = (finalMessage ? finalMessage + '\n\n' : '') + `[Attachment: ${att.name}]\n\`\`\`\n${textContent}\n\`\`\`\n`;
           } catch (e) {
               console.error("Error decoding text attachment", e);
+              // If decoding fails, fall back to standard attachment (though likely unreadable if binary)
+              geminiParts.push({
+                  inlineData: {
+                      mimeType: att.type,
+                      data: base64Data
+                  }
+              });
           }
       } else {
-          // For images/PDFs, only used for Gemini parts currently
+          // For images/PDFs, used for Gemini multimodal
           geminiParts.push({
               inlineData: {
                   mimeType: att.type,
@@ -127,23 +135,20 @@ export const sendMessageToGemini = async (
       }
   });
   
-  // Check if model is in the Routeway list.
   const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
-
-  // Use the model ID exactly as is (including :free) to ensure correct API routing
   const actualModel = trimmedModel;
-
   const isOpenRouter = OPENROUTER_FREE_MODELS.includes(trimmedModel) || (trimmedModel.includes(':free') && !isRouteway);
 
-  // Fallback to Pro for execute mode if not using external provider
+  // Fallback to Pro for execute mode if using Gemini default models
   let finalModel = actualModel;
   if (mode === 'execute' && !isOpenRouter && !isRouteway && !actualModel.includes('gemini-3-pro')) {
       finalModel = 'gemini-3-pro-preview';
   }
 
-  // Prepend "You are running in Shuper" to ensure model self-awareness
+  // Prepend context to system instruction
   let updatedSystemInstruction = `You are running in Shuper, an advanced AI workspace.\n${systemInstruction || ''}`;
 
+  // Route to OpenAI-compatible providers
   if (isOpenRouter || isRouteway) {
       return sendMessageToOpenAICompatible(
           finalMessage, // Pass the processed message containing text attachments
@@ -157,12 +162,14 @@ export const sendMessageToGemini = async (
       );
   }
 
+  // Gemini Handler
   const geminiKey = apiKeys?.gemini || process.env.API_KEY;
   if (!geminiKey) return { text: "Missing Gemini API Key. Please add it in Settings." };
 
   const ai = new GoogleGenAI({ apiKey: geminiKey });
   
   try {
+    // Add the final text message part (including attachment text)
     if (finalMessage && finalMessage.trim()) geminiParts.push({ text: finalMessage });
     else if (geminiParts.length === 0) geminiParts.push({ text: " " });
 
@@ -176,7 +183,6 @@ export const sendMessageToGemini = async (
         if (mode === 'execute') {
             config.thinkingConfig = { thinkingBudget: 32768 }; 
         } else {
-            // Explicitly disable thinking to prevent plan-leakage in Explore mode
             config.thinkingConfig = { thinkingBudget: 0 };
         }
     }
@@ -213,41 +219,35 @@ const PROXIES = [
 
 async function fetchJsonWithRetry(url: string, options: RequestInit, providerName: string): Promise<any> {
     // 1. Try Direct Fetch first
-    // Many providers allow CORS or have specific allowed origins.
     try {
         const response = await fetch(url, options);
-        
-        // If 200 OK, return json
         if (response.ok) return await response.json();
         
-        // If 401 Unauthorized, proxy won't fix it (wrong key)
-        if (response.status === 401) {
+        // 400/401 usually mean configuration error (key/params), not CORS.
+        if (response.status === 400 || response.status === 401) {
              const errText = await response.text();
-             throw new Error(`Unauthorized (401): ${errText}`);
-        }
-
-        // If other error code, might be blocking (403) or server error (500). 
-        // We throw here to fall through to proxy retry, EXCEPT for 400 Bad Request which is likely logic error.
-        if (response.status === 400) {
-            const errText = await response.text();
-            throw new Error(`Bad Request (400): ${errText}`);
+             throw new Error(`${response.status}: ${errText}`);
         }
         
         throw new Error(`Direct fetch failed with status ${response.status}`);
     } catch (e: any) {
-        // If network error (CORS block) or non-fatal error, log and try proxies
-        console.warn(`[${providerName}] Direct fetch failed (${e.message}), attempting proxies...`);
+        console.warn(`[${providerName}] Direct fetch failed, attempting proxies...`, e.message);
     }
 
     // 2. Try Proxies
+    // Strip custom headers that might trigger CORS preflight issues on proxies
+    const proxyHeaders = { ...options.headers } as Record<string, string>;
+    delete proxyHeaders['HTTP-Referer'];
+    delete proxyHeaders['X-Title'];
+    delete proxyHeaders['Origin'];
+
+    const proxyOptions = { ...options, headers: proxyHeaders, credentials: 'omit' as RequestCredentials };
+
     let lastError: any;
     for (const proxyGen of PROXIES) {
         try {
             const proxyUrl = proxyGen(url);
-            const response = await fetch(proxyUrl, {
-                ...options,
-                credentials: 'omit'
-            });
+            const response = await fetch(proxyUrl, proxyOptions);
 
             if (!response.ok) {
                  let errText = await response.text().catch(() => '');
@@ -256,11 +256,10 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
                     errText = json.error?.message || json.message || errText;
                  } catch {}
                  
-                 // If 401/400 from proxy, it means the target API rejected it, so stop retrying
+                 // Fatal errors that proxies won't fix
                  if (response.status === 400 || response.status === 401) {
                     throw new Error(`API Error ${response.status}: ${errText.slice(0, 100)}`);
                  }
-                 
                  throw new Error(`Proxy Status ${response.status}: ${errText.slice(0, 100)}`);
             }
             
@@ -271,173 +270,96 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
         }
     }
     
-    // 3. Fallback / Failure
-    const errorMsg = lastError?.message || "Unknown error";
-    throw new Error(`${providerName} connection failed. The browser blocked the request (CORS) and proxies are unavailable. Details: ${errorMsg}`);
+    throw new Error(`${providerName} connection failed. Browser blocked the request (CORS) or proxy is down. Details: ${lastError?.message || 'Unknown'}`);
 }
 
 /**
- * Searches Scira and returns the results.
- * Can be used for grounding before sending to another model.
+ * Searches Scira.
  */
-export const searchScira = async (
-    query: string,
-    apiKey: string | undefined
-): Promise<string> => {
+export const searchScira = async (query: string, apiKey: string | undefined): Promise<string> => {
     if (!apiKey) throw new Error("Scira API Key is missing.");
-    if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
-
     const endpoint = 'https://api.scira.ai/api/search';
     
-    const body = { 
-        messages: [
-            { role: 'user', content: query }
-        ] 
-    };
-
-    try {
-        const data = await fetchJsonWithRetry(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey.trim()}`,
-                'HTTP-Referer': window.location.origin,
-                'X-Title': 'Shuper Workspace'
-            },
-            body: JSON.stringify(body)
-        }, 'Scira');
-
-        let formattedText = "";
-
+    // Scira needs Authorization header
+    return await fetchJsonWithRetry(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey.trim()}`
+        },
+        body: JSON.stringify({ messages: [{ role: 'user', content: query }] })
+    }, 'Scira').then(data => {
         if (data.text) {
-            formattedText = data.text;
-            
-            // Append sources if present
-            if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
-                formattedText += `\n\n---\n**Sources:**\n` + 
-                    data.sources.map((s: string) => `- <${s}>`).join('\n');
-            }
-        } else {
-            formattedText = "No structured text returned from Scira.";
+            let res = data.text;
+            if (data.sources?.length) res += `\n\n---\n**Sources:**\n` + data.sources.map((s: string) => `- <${s}>`).join('\n');
+            return res;
         }
-
-        return formattedText;
-
-    } catch (error: any) {
-        console.error("Scira API Error:", error);
-        throw error;
-    }
+        return "No structured text returned from Scira.";
+    });
 };
 
 /**
- * Searches Exa and returns the results.
+ * Searches Exa.
  */
-export const searchExa = async (
-    query: string,
-    apiKey: string | undefined
-): Promise<string> => {
+export const searchExa = async (query: string, apiKey: string | undefined): Promise<string> => {
     if (!apiKey) throw new Error("Exa API Key is missing.");
-    if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
-
     const endpoint = 'https://api.exa.ai/search';
 
-    const body = {
-        query: query,
-        type: "auto",
-        num_results: 10,
-        contents: {
-            highlights: {
-                max_characters: 2000
-            }
-        }
-    };
-
-    try {
-        const data = await fetchJsonWithRetry(endpoint, {
-            method: 'POST',
-            headers: {
-                'x-api-key': apiKey.trim(),
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        }, 'Exa');
-
-        let formattedText = "";
-
-        if (data.results && Array.isArray(data.results)) {
-            formattedText = data.results.map((r: any, i: number) => {
-                const title = r.title || 'Untitled';
-                const url = r.url || '#';
-                const highlight = r.highlights && r.highlights.length > 0 ? r.highlights[0] : (r.text || 'No snippet available');
-                return `**${i + 1}. [${title}](${url})**\n> ${highlight}\n`;
+    // Exa uses x-api-key header
+    return await fetchJsonWithRetry(endpoint, {
+        method: 'POST',
+        headers: {
+            'x-api-key': apiKey.trim(),
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            query: query,
+            type: "auto",
+            num_results: 10,
+            contents: { highlights: { max_characters: 2000 } }
+        })
+    }, 'Exa').then(data => {
+        if (data.results?.length) {
+            return data.results.map((r: any, i: number) => {
+                const hl = r.highlights?.[0] || r.text || 'No snippet';
+                return `**${i + 1}. [${r.title || 'Untitled'}](${r.url || '#'})**\n> ${hl}\n`;
             }).join('\n');
-        } else {
-            formattedText = "No results returned from Exa.";
         }
-
-        return formattedText;
-
-    } catch (error: any) {
-        console.error("Exa API Error:", error);
-        throw error;
-    }
+        return "No results returned from Exa.";
+    });
 };
 
 /**
- * Searches Tavily and returns the results.
+ * Searches Tavily.
  */
-export const searchTavily = async (
-    query: string,
-    apiKey: string | undefined
-): Promise<string> => {
+export const searchTavily = async (query: string, apiKey: string | undefined): Promise<string> => {
     if (!apiKey) throw new Error("Tavily API Key is missing.");
-    if (!query || query.trim().length < 2) throw new Error("Query too short (min 2 chars).");
-
     const endpoint = 'https://api.tavily.com/search';
     
-    // Tavily expects api_key in the body or as query param, not typically as Bearer token for client-side
-    const body = {
-        api_key: apiKey.trim(),
-        query: query,
-        topic: "general",
-        search_depth: "basic",
-        max_results: 5,
-        include_answer: true,
-        include_raw_content: false
-    };
-
-    try {
-        const data = await fetchJsonWithRetry(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        }, 'Tavily');
-
-        let formattedText = "";
-
-        if (data.answer) {
-            formattedText += `**Direct Answer:**\n${data.answer}\n\n---\n`;
-        }
-
-        if (data.results && Array.isArray(data.results)) {
-            formattedText += data.results.map((r: any, i: number) => {
-                const title = r.title || 'Untitled';
-                const url = r.url || '#';
-                const content = r.content || 'No snippet available';
-                return `**${i + 1}. [${title}](${url})**\n> ${content}\n`;
-            }).join('\n');
+    // Tavily accepts api_key in body, which is safer for proxies that might strip Auth headers
+    return await fetchJsonWithRetry(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            api_key: apiKey.trim(),
+            query: query,
+            topic: "general",
+            search_depth: "basic",
+            max_results: 5,
+            include_answer: true
+        })
+    }, 'Tavily').then(data => {
+        let res = "";
+        if (data.answer) res += `**Direct Answer:**\n${data.answer}\n\n---\n`;
+        if (data.results?.length) {
+            res += data.results.map((r: any, i: number) => 
+                `**${i + 1}. [${r.title}](${r.url})**\n> ${r.content || 'No snippet'}\n`
+            ).join('\n');
         } else {
-            formattedText += "No detailed results returned from Tavily.";
+            res += "No detailed results returned from Tavily.";
         }
-
-        return formattedText;
-
-    } catch (error: any) {
-        console.error("Tavily API Error:", error);
-        throw error;
-    }
+        return res;
+    });
 };
 
 const sendMessageToOpenAICompatible = async (
@@ -454,26 +376,15 @@ const sendMessageToOpenAICompatible = async (
     if (!apiKeys) return { text: `API configuration missing. Please check Settings.` };
 
     const trimmedModel = modelName.trim();
-    // Logic to detect provider.
     const isRouteway = ROUTEWAY_MODELS.includes(trimmedModel);
-
-    let fullUrl = '';
-    
-    if (isRouteway) {
-        fullUrl = 'https://api.routeway.ai/v1/chat/completions';
-    } else {
-        fullUrl = 'https://openrouter.ai/api/v1/chat/completions';
-    }
+    let fullUrl = isRouteway ? 'https://api.routeway.ai/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
 
     const messages = [];
     if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
 
     history.forEach(h => {
-        // Concatenate text parts
         const content = h.parts.filter(p => p.text).map(p => p.text).join(' ');
-        if (content.trim()) {
-            messages.push({ role: h.role === 'model' ? 'assistant' : 'user', content });
-        }
+        if (content.trim()) messages.push({ role: h.role === 'model' ? 'assistant' : 'user', content });
     });
 
     messages.push({ role: 'user', content: message });
@@ -498,14 +409,8 @@ const sendMessageToOpenAICompatible = async (
     };
 
     try {
-        let keyToTry = '';
-        if (isRouteway) keyToTry = apiKeys.routeway;
-        else keyToTry = apiKeys.openRouter;
-
-        if (!keyToTry && !isRouteway && apiKeys.openRouterAlt) {
-            keyToTry = apiKeys.openRouterAlt; // Use alt if primary missing for OpenRouter
-        }
-
+        let keyToTry = isRouteway ? apiKeys.routeway : apiKeys.openRouter;
+        if (!keyToTry && !isRouteway && apiKeys.openRouterAlt) keyToTry = apiKeys.openRouterAlt;
         if (!keyToTry) throw new Error(`API Key for ${isRouteway ? 'Routeway' : 'OpenRouter'} missing.`);
 
         let response = await tryFetch(keyToTry);
