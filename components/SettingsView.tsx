@@ -485,8 +485,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                       <h4 className="text-[11px] font-bold text-[var(--text-dim)] uppercase tracking-widest">Web Search</h4>
                                   </div>
                                   <div className="grid grid-cols-1 gap-4">
-                                      <ApiKeyInput label="Scira Search" value={settings.apiKeys.scira} onChange={(v) => updateApiKey('scira', v)} placeholder="sk-..." description="Real-time web search" />
-                                      <ApiKeyInput label="Exa Search" value={settings.apiKeys.exa} onChange={(v) => updateApiKey('exa', v)} placeholder="Exa API Key..." description="Neural web search alternative" />
+                                      <ApiKeyInput label="Scira Search" value={settings.apiKeys.scira} onChange={(v) => updateApiKey('scira', v)} placeholder="Not currently available" description="Real-time web search" />
+                                      <ApiKeyInput label="Exa Search" value={settings.apiKeys.exa} onChange={(v) => updateApiKey('exa', v)} placeholder="Not currently available" description="Neural web search alternative" />
                                       <ApiKeyInput label="Tavily Search" value={settings.apiKeys.tavily} onChange={(v) => updateApiKey('tavily', v)} placeholder="tvly-..." description="Search engine for LLM agents" />
                                   </div>
                               </div>
