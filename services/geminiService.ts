@@ -222,7 +222,7 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
     }
 
     // 2. Try Proxies
-    // We clean headers that are likely to cause preflight issues or reveal original origin to strict APIs
+    // Clean headers that reveal original origin or trigger preflights in proxies
     const proxyHeaders = { ...options.headers } as Record<string, string>;
     delete proxyHeaders['Origin'];
     delete proxyHeaders['Referer'];
@@ -232,7 +232,12 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
     for (const proxyGen of PROXIES) {
         try {
             const proxyUrl = proxyGen(url);
-            const response = await fetch(proxyUrl, { ...options, headers: proxyHeaders, credentials: 'omit' });
+            const response = await fetch(proxyUrl, { 
+                ...options, 
+                headers: proxyHeaders, 
+                credentials: 'omit',
+                mode: 'cors' 
+            });
 
             if (!response.ok) {
                  let errText = await response.text().catch(() => '');
