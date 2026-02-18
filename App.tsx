@@ -67,7 +67,13 @@ STRICT CONVERSATION RULES:
 2. NO META-TALK. Don't explain your thoughts in brackets.
 3. BE DIRECT. Get straight to the point.
 4. BE PERSONAL. Use the user's name (${userName}) naturally.
-5. MATH FORMATTING: MANDATORY. Always use LaTeX for ALL mathematical expressions, formulas, and equations. Use double dollar signs $$...$$ for block math and single dollar signs $...$ for inline math. Never output raw text math like √ or ^ or complex fractions in plain text.
+5. MATH FORMATTING: MANDATORY. Always use LaTeX for ALL mathematical expressions, formulas, and equations. 
+   - Use double dollar signs $$...$$ for block math.
+   - Use single dollar signs $...$ for inline math. 
+   - ALL LaTeX commands (e.g., \\times, \\sqrt, \\frac, \\boxed) MUST be enclosed within these delimiters.
+   - NEVER output raw text math symbols like √, ^ (for powers), or plain text fractions (like 3/4) outside of math blocks.
+   - Correct: $\\sqrt{10}$ or $2 \\times 5$. 
+   - Incorrect: \\sqrt{10} or 2 x 5 or √10.
 6. FORMATTING. ${mode === 'explore' ? 'Answer directly without a formal plan.' : 'Start your response with a quick list of what you are going to do using hyphens (-).'}
 
 ${mode === 'execute' ? `
@@ -554,19 +560,36 @@ export const App: React.FC = () => {
         }
         const finalMsgsAfterStateUpdate = sessionMessages[currentSessionId] || [];
         const currentIndex = finalMsgsAfterStateUpdate.findIndex(m => m.id === newMessageId);
+        
+        // CONSTRUCT HISTORY: Decode text/code attachments so the AI can "see" past snippets correctly
         const historyData = finalMsgsAfterStateUpdate.slice(0, currentIndex).map(m => {
             const parts: any[] = [];
-            if (m.content && m.content.trim()) parts.push({ text: m.content });
+            let compositeText = m.content || "";
+            
             if (m.attachments && m.attachments.length > 0) {
                 m.attachments.forEach(att => {
                     if (!att.data) return;
                     const base64Data = att.data.includes('base64,') ? att.data.split('base64,')[1] : att.data;
-                    parts.push({ inlineData: { mimeType: att.type, data: base64Data } });
+                    
+                    // If it's a text-based attachment (snippet), inject it directly as text part so AI can read it from history
+                    if (att.type.startsWith('text/') || att.type === 'application/json' || att.type.includes('javascript') || att.type.includes('typescript')) {
+                        try {
+                            const decoded = decodeURIComponent(escape(atob(base64Data)));
+                            compositeText = (compositeText ? compositeText + '\n\n' : '') + `[Attachment: ${att.name}]\n\`\`\`\n${decoded}\n\`\`\`\n`;
+                        } catch (e) {
+                            parts.push({ inlineData: { mimeType: att.type, data: base64Data } });
+                        }
+                    } else {
+                        parts.push({ inlineData: { mimeType: att.type, data: base64Data } });
+                    }
                 });
             }
+            
+            if (compositeText.trim()) parts.unshift({ text: compositeText });
             if (parts.length === 0) parts.push({ text: " " });
             return { role: m.role, parts: parts };
         });
+
         const agent = agents.find(a => a.id === modelId);
         let baseInst = settings.baseKnowledge;
         let actualModel = modelId;
@@ -691,7 +714,7 @@ export const App: React.FC = () => {
               setSessions([newSession]);
               setSessionMessages(prev => { const n = { ...prev }; delete n[id]; n[newSession.id] = []; return n; });
               setActiveSessionId(newSession.id);
-              navigateTo('chat', newSession.id); // Explicit selection
+              navigateTo('chat', newSession.id); 
               if (hasAnyKey && (settings.defaultModel || settings.visibleModels.length > 0)) {
                   setSessionModels(prev => { const n = { ...prev }; delete n[id]; n[newSession.id] = settings.defaultModel || settings.visibleModels[0]; return n; });
               }
