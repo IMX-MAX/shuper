@@ -204,50 +204,35 @@ export const sendMessageToGemini = async (
 
 const PROXIES = [
     (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    // Fallback proxy if corsproxy.io is down
     (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
 ];
 
 async function fetchJsonWithRetry(url: string, options: RequestInit, providerName: string): Promise<any> {
-    // 1. Try Direct Fetch first
+    // 1. Try Direct Fetch
     try {
         const response = await fetch(url, options);
         if (response.ok) return await response.json();
         
-        // 400/401/403 often mean configuration error or key error, not CORS
-        // But 403 can also be WAF/CORS. We throw to try proxy unless it's strictly 400/401.
         if (response.status === 400 || response.status === 401) {
              const errText = await response.text();
              throw new Error(`${response.status}: ${errText}`);
         }
-        
-        throw new Error(`Direct fetch failed with status ${response.status}`);
     } catch (e: any) {
-        console.warn(`[${providerName}] Direct fetch failed, attempting proxies...`, e.message);
+        console.warn(`[${providerName}] Direct fetch failed:`, e.message);
     }
 
     // 2. Try Proxies
-    // IMPORTANT: Proxies need to forward our custom headers (x-api-key, etc.)
-    // We strip headers that browsers or proxies might override or reject.
+    // We clean headers that are likely to cause preflight issues or reveal original origin to strict APIs
     const proxyHeaders = { ...options.headers } as Record<string, string>;
-    delete proxyHeaders['HTTP-Referer'];
-    delete proxyHeaders['X-Title'];
     delete proxyHeaders['Origin'];
     delete proxyHeaders['Referer'];
     delete proxyHeaders['Host'];
-
-    // Ensure options include the cleaned headers
-    const proxyOptions = { 
-        ...options, 
-        headers: proxyHeaders, 
-        credentials: 'omit' as RequestCredentials 
-    };
 
     let lastError: any;
     for (const proxyGen of PROXIES) {
         try {
             const proxyUrl = proxyGen(url);
-            const response = await fetch(proxyUrl, proxyOptions);
+            const response = await fetch(proxyUrl, { ...options, headers: proxyHeaders, credentials: 'omit' });
 
             if (!response.ok) {
                  let errText = await response.text().catch(() => '');
@@ -256,7 +241,6 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
                     errText = json.error?.message || json.message || errText;
                  } catch {}
                  
-                 // Fatal errors (Bad Request, Unauthorized) usually mean the API received it but rejected it
                  if (response.status === 400 || response.status === 401) {
                     throw new Error(`API Error ${response.status}: ${errText.slice(0, 100)}`);
                  }
@@ -265,12 +249,12 @@ async function fetchJsonWithRetry(url: string, options: RequestInit, providerNam
             
             return await response.json();
         } catch (e: any) {
-            console.warn(`[${providerName}] Proxy failed via ${proxyGen(url).split('?')[0]}`, e);
+            console.warn(`[${providerName}] Proxy failed via ${proxyGen(url).split('?')[0]}`, e.message);
             lastError = e;
         }
     }
     
-    throw new Error(`${providerName} connection failed. Browser blocked request (CORS) or proxy is down. Details: ${lastError?.message || 'Unknown'}`);
+    throw new Error(`${providerName} connection failed (CORS/Proxy). Details: ${lastError?.message || 'Unknown'}`);
 }
 
 /**
@@ -280,7 +264,6 @@ export const searchScira = async (query: string, apiKey: string | undefined): Pr
     if (!apiKey) throw new Error("Scira API Key is missing.");
     const endpoint = 'https://api.scira.ai/api/search';
     
-    // Scira uses 'x-api-key' header
     return await fetchJsonWithRetry(endpoint, {
         method: 'POST',
         headers: {
@@ -305,7 +288,6 @@ export const searchExa = async (query: string, apiKey: string | undefined): Prom
     if (!apiKey) throw new Error("Exa API Key is missing.");
     const endpoint = 'https://api.exa.ai/search';
 
-    // Exa uses 'x-api-key' header
     return await fetchJsonWithRetry(endpoint, {
         method: 'POST',
         headers: {
@@ -336,7 +318,6 @@ export const searchTavily = async (query: string, apiKey: string | undefined): P
     if (!apiKey) throw new Error("Tavily API Key is missing.");
     const endpoint = 'https://api.tavily.com/search';
     
-    // Tavily accepts api_key in body, which is safest for proxies
     return await fetchJsonWithRetry(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
