@@ -30,7 +30,7 @@ const DEFAULT_LABELS: Label[] = [
 ];
 
 const DEFAULT_SETTINGS: UserSettings = {
-    theme: 'dark',
+    theme: 'light',
     colorTheme: 'Default',
     fontFamily: 'Inter',
     accentColor: '#F5F5F5',
@@ -67,7 +67,8 @@ STRICT CONVERSATION RULES:
 2. NO META-TALK. Don't explain your thoughts in brackets.
 3. BE DIRECT. Get straight to the point.
 4. BE PERSONAL. Use the user's name (${userName}) naturally.
-5. FORMATTING. ${mode === 'explore' ? 'Answer directly without a formal plan.' : 'Start your response with a quick list of what you are going to do using hyphens (-).'}
+5. MATH FORMATTING: MANDATORY. Always use LaTeX for ALL mathematical expressions, formulas, and equations. Use double dollar signs $$...$$ for block math and single dollar signs $...$ for inline math. Never output raw text math like √ or ^ or complex fractions in plain text.
+6. FORMATTING. ${mode === 'explore' ? 'Answer directly without a formal plan.' : 'Start your response with a quick list of what you are going to do using hyphens (-).'}
 
 ${mode === 'execute' ? `
 EXECUTE MODE (PLANNING):
@@ -89,7 +90,6 @@ CAPABILITIES:
 
 /**
  * Custom hook to manage state synchronized with localStorage.
- * Includes a debounce mechanism to prevent high-frequency disk writes (e.g. during typing).
  */
 function useStickyState<T>(defaultValue: T, key: string, debounceMs: number = 0): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
@@ -147,25 +147,16 @@ const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) 
 
     return (
         <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white text-black font-inter select-none overflow-hidden p-6 ${isExiting ? 'animate-onboard-exit' : ''}`}>
-            {/* Background Pattern */}
             <div className="absolute inset-0 z-0 opacity-[0.3] pointer-events-none" 
                  style={{ backgroundImage: 'radial-gradient(#9ca3af 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
             </div>
-
-            {/* Content Container */}
             <div className={`relative z-10 w-full max-w-4xl flex flex-col items-center text-center ${!isExiting ? 'animate-fly-in-up' : ''}`}>
-                
-                {/* Main Heading */}
                 <h1 className="text-[4rem] md:text-[7rem] leading-[0.9] font-black tracking-tighter mb-6 text-black">
                     Welcome to<br/>Shuper
                 </h1>
-
-                {/* Subtext Section */}
                 <div className="text-xl md:text-2xl font-medium text-gray-400 mb-16 tracking-tight">
                     the most productive AI workspace maybe ever
                 </div>
-
-                {/* Input Fields Area */}
                 <div className="w-full max-w-sm space-y-6 mb-12">
                     <div className="group relative">
                         <input 
@@ -188,8 +179,6 @@ const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) 
                         />
                     </div>
                 </div>
-
-                {/* CTA Button */}
                 <button 
                     onClick={handleComplete}
                     disabled={!name || !workspace}
@@ -198,14 +187,10 @@ const OnboardingModal: React.FC<{ onComplete: (name: string, workspace: string) 
                     Get Started
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
-
-                {/* Footer Link */}
                 <div className="mt-12 text-[10px] text-gray-400 font-medium tracking-[0.2em] uppercase">
                     shuper.app.local
                 </div>
             </div>
-            
-            {/* Decorative Card mimic */}
             <div className={`absolute bottom-10 left-10 hidden lg:block bg-white border border-gray-100 p-4 rounded-xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.1)] max-w-xs rotate-2 ${!isExiting ? 'animate-fly-in-up' : ''} ${isExiting ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}>
                 <div className="text-xs text-gray-500 mb-2 font-medium">Hello, {name || 'Stranger'}. What would you like to build today?</div>
                 <div className="flex items-center gap-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
@@ -274,13 +259,11 @@ export const App: React.FC = () => {
   const [agents, setAgents] = useStickyState<Agent[]>([], 'shuper_agents');
   const [sessions, setSessions] = useStickyState<Session[]>([], 'shuper_sessions');
   
-  // Persistence with debounce to prevent typing lag
   const [sessionMessages, setSessionMessages] = useStickyState<Record<string, Message[]>>({}, 'shuper_messages', 1000);
   const [sessionDrafts, setSessionDrafts] = useStickyState<Record<string, string>>({}, 'shuper_drafts', 500);
   
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   
-  // Track active session ID in a Ref to access it inside stale closures (async operations)
   const activeSessionIdRef = useRef<string | null>(null);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
 
@@ -291,19 +274,12 @@ export const App: React.FC = () => {
   const [history, setHistory] = useState<NavigationState[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
-  const [providerError, setProviderError] = useState<string | null>(null);
-  
-  // Lifted state for title editing
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'chat' | 'agent', id: string, title: string } | null>(null);
   const abortControllers = useRef<Record<string, AbortController>>({});
 
-  // Disable Browser Context Menu Globally
   useEffect(() => {
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-    };
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
     document.addEventListener('contextmenu', handleContextMenu);
     return () => document.removeEventListener('contextmenu', handleContextMenu);
   }, []);
@@ -331,7 +307,6 @@ export const App: React.FC = () => {
     setCurrentView(state.view);
     if (state.sessionId) {
       setActiveSessionId(state.sessionId);
-      // Clear badge when navigating via history
       setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === state.sessionId ? { ...s, hasNewResponse: false } : s) : prev);
     }
   }, []);
@@ -357,13 +332,8 @@ export const App: React.FC = () => {
   const navigateTo = useCallback((view: ViewType, sessionId?: string) => {
     const newState: NavigationState = { view, sessionId };
     const newHistory = history.slice(0, historyIndex + 1);
-    
-    // Don't push duplicate states
     const lastState = newHistory[newHistory.length - 1];
-    if (lastState && lastState.view === view && lastState.sessionId === sessionId) {
-      return;
-    }
-
+    if (lastState && lastState.view === view && lastState.sessionId === sessionId) return;
     newHistory.push(newState);
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
@@ -378,11 +348,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      // Alt + . toggle both panels (Changed from Ctrl + .)
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.altKey && e.key === '.') {
         e.preventDefault();
         const shouldBeVisible = !isSidebarVisible || !isSubSidebarVisible;
@@ -390,88 +356,47 @@ export const App: React.FC = () => {
         setIsSubSidebarVisible(shouldBeVisible);
         return;
       }
-
       if (e.altKey) {
         switch (e.key.toLowerCase()) {
-          case 'n':
-            e.preventDefault();
-            handleNewSession();
-            break;
-          case 'p':
-            e.preventDefault();
-            navigateTo('settings');
-            break;
-          case 's':
-            e.preventDefault();
-            navigateTo('chat');
-            setIsMobileSessionListOpen(true);
-            setTriggerSearch(prev => prev + 1);
-            break;
-          case 'b':
-            e.preventDefault();
-            setIsSidebarVisible(prev => !prev);
-            break;
-          case 'arrowleft':
-            e.preventDefault();
-            handleBack();
-            break;
-          case 'arrowright':
-            e.preventDefault();
-            handleForward();
-            break;
+          case 'n': e.preventDefault(); handleNewSession(); break;
+          case 'p': e.preventDefault(); navigateTo('settings'); break;
+          case 's': e.preventDefault(); navigateTo('chat'); setIsMobileSessionListOpen(true); setTriggerSearch(prev => prev + 1); break;
+          case 'b': e.preventDefault(); setIsSidebarVisible(prev => !prev); break;
+          case 'arrowleft': e.preventDefault(); handleBack(); break;
+          case 'arrowright': e.preventDefault(); handleForward(); break;
         }
       }
     };
-
     window.addEventListener('keydown', handleGlobalShortcuts);
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [sessions, currentView, activeSessionId, handleBack, handleForward, isSidebarVisible, isSubSidebarVisible, navigateTo]);
 
   useEffect(() => {
       if (settings.onboardingComplete) {
-          if (sessions.length === 0 && currentView === 'chat') {
-              handleNewSession();
-          }
+          if (sessions.length === 0 && currentView === 'chat') handleNewSession();
       }
   }, [settings.onboardingComplete]);
 
-  // Robust Theme Effect
   useEffect(() => {
     const applyTheme = () => {
       let mode = settings.theme;
-      if (settings.theme === 'system') {
-        mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-      
-      if (mode === 'light') {
-        document.body.classList.add('light-mode');
-      } else {
-        document.body.classList.remove('light-mode');
-      }
-      
+      if (settings.theme === 'system') mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      if (mode === 'light') document.body.classList.add('light-mode');
+      else document.body.classList.remove('light-mode');
       document.body.setAttribute('data-theme', settings.colorTheme);
       document.body.setAttribute('data-font', settings.fontFamily);
       document.documentElement.style.setProperty('--accent', settings.accentColor);
     };
-
     applyTheme();
-
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleSystemThemeChange = () => {
-      if (settings.theme === 'system') applyTheme();
-    };
-
+    const handleSystemThemeChange = () => { if (settings.theme === 'system') applyTheme(); };
     mediaQuery.addEventListener('change', handleSystemThemeChange);
     return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
   }, [settings.theme, settings.accentColor, settings.colorTheme, settings.fontFamily]);
 
   const filteredSessions = useMemo(() => {
     const sessionArr = Array.isArray(sessions) ? sessions : [];
-    
-    if (currentFilter === 'archived') {
-        return sessionArr.filter(s => s.status === 'archive');
-    }
-
+    if (currentFilter === 'archived') return sessionArr.filter(s => s.status === 'archive');
     if (currentFilter.startsWith('status:')) {
         const status = currentFilter.split(':')[1] as SessionStatus;
         return sessionArr.filter(s => s.status === status);
@@ -488,9 +413,7 @@ export const App: React.FC = () => {
 
   const statusCounts = useMemo(() => {
       const counts: Record<string, number> = { backlog: 0, todo: 0, needs_review: 0, done: 0, cancelled: 0, archive: 0 };
-      if (Array.isArray(sessions)) {
-          sessions.forEach(s => { if (counts[s.status] !== undefined) counts[s.status]++; });
-      }
+      if (Array.isArray(sessions)) sessions.forEach(s => { if (counts[s.status] !== undefined) counts[s.status]++; });
       return counts as Record<SessionStatus, number>;
   }, [sessions]);
 
@@ -498,29 +421,14 @@ export const App: React.FC = () => {
   const activeMessages = activeSessionId ? (sessionMessages[activeSessionId] || []) : [];
   const activeLoading = activeSessionId ? (sessionLoading[activeSessionId] || false) : false;
 
-  const handleLogoClick = () => {
-    setLogoClicks(prev => {
-        const next = prev + 1;
-        if (next >= 10) {
-            setIsLogoGlowing(true);
-        }
-        return next;
-    });
-    };
-
   const handleUpdateSettings = useCallback((newSettings: UserSettings) => {
     setSettings(newSettings);
   }, [setSettings]);
 
   const handleSelectSession = (id: string) => {
-      if (id === activeSessionId) {
-          setIsMobileSessionListOpen(false);
-          return;
-      }
+      if (id === activeSessionId) { setIsMobileSessionListOpen(false); return; }
       navigateTo('chat', id);
       setIsMobileSessionListOpen(false);
-
-      // Clear new response badge when selecting a session
       setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, hasNewResponse: false } : s) : prev);
   };
 
@@ -528,28 +436,19 @@ export const App: React.FC = () => {
       const newSession = createSessionObject();
       setSessions(prev => [newSession, ...(Array.isArray(prev) ? prev : [])]);
       setSessionMessages(prev => ({ ...prev, [newSession.id]: [] }));
-      
-      // Only set a default model if configured in settings
       if (hasAnyKey && (settings.defaultModel || settings.visibleModels.length > 0)) {
           const defaultModel = settings.defaultModel || settings.visibleModels[0];
           setSessionModels(prev => ({ ...prev, [newSession.id]: defaultModel }));
       }
-
       handleSelectSession(newSession.id);
   };
 
   const handleRegenerateTitle = async (sessionId: string) => {
       const messages = sessionMessages[sessionId];
       if (!messages || messages.length === 0) return;
-      
       const session = Array.isArray(sessions) ? sessions.find(s => s.id === sessionId) : null;
       if (!session) return;
-
-      const historyData = messages.map(m => ({
-          role: m.role,
-          parts: [{ text: m.content }]
-      }));
-
+      const historyData = messages.map(m => ({ role: m.role, parts: [{ text: m.content }] }));
       const newTitle = await generateSessionTitle(historyData, session.title, settings.defaultModel, settings.apiKeys.gemini);
       setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === sessionId ? { ...s, title: newTitle } : s) : prev);
   };
@@ -562,15 +461,11 @@ export const App: React.FC = () => {
             setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === sessionId ? { ...s, status: newStatus } : s) : prev);
         }
     }
-
     const titleMatch = text.match(/\[\[TITLE:\s*(.*?)\]\]/);
     if (titleMatch) {
         const newTitle = titleMatch[1].trim();
-        if (newTitle) {
-            setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === sessionId ? { ...s, title: newTitle } : s) : prev);
-        }
+        if (newTitle) setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === sessionId ? { ...s, title: newTitle } : s) : prev);
     }
-
     const labelMatch = text.match(/\[\[LABEL:\s*(.*?)\]\]/);
     if (labelMatch) {
         const labelName = labelMatch[1].trim();
@@ -580,12 +475,7 @@ export const App: React.FC = () => {
             setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, labelIds: s.labelIds.includes(lid) ? s.labelIds : [...s.labelIds, lid] } : s));
         }
     }
-
-    return text
-        .replace(/\[\[STATUS:.*?\]\]/g, '')
-        .replace(/\[\[TITLE:.*?\]\]/g, '')
-        .replace(/\[\[LABEL:.*?\]\]/g, '')
-        .trim();
+    return text.replace(/\[\[STATUS:.*?\]\]/g, '').replace(/\[\[TITLE:.*?\]\]/g, '').replace(/\[\[LABEL:.*?\]\]/g, '').trim();
   };
 
   const handleStopGeneration = (sessionId: string) => {
@@ -599,61 +489,32 @@ export const App: React.FC = () => {
   const handleSendMessage = async (text: string, attachments: Attachment[], useThinking: boolean, mode: SessionMode, useSearch: boolean, searchProvider: 'scira' | 'exa' | 'tavily', existingMsgId?: string) => {
     if (!activeSessionId) return;
     const currentSessionId = activeSessionId; 
-
     const modelId = sessionModels[currentSessionId];
     if (!modelId) return;
-
-    // Strict rename logic: Only rename if it is explicitly "New Chat" and this is the first interaction.
     const currentSessionMessages = sessionMessages[currentSessionId] || [];
     const isFirstMessage = currentSessionMessages.length === 0;
-
     if (activeSession?.title === 'New Chat' && text && !existingMsgId && isFirstMessage) {
         setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === currentSessionId && s.title === 'New Chat' ? { ...s, title: text.slice(0, 30) + (text.length > 30 ? '...' : '') } : s) : prev);
     }
-
     let newMessageId = Date.now().toString();
     if (existingMsgId) {
         newMessageId = existingMsgId;
-        setSessionMessages(prev => ({
-            ...prev,
-            [currentSessionId]: (prev[currentSessionId] || []).map(m => m.id === existingMsgId ? { ...m, content: text, attachments: attachments } : m)
-        }));
+        setSessionMessages(prev => ({ ...prev, [currentSessionId]: (prev[currentSessionId] || []).map(m => m.id === existingMsgId ? { ...m, content: text, attachments: attachments } : m) }));
     } else {
-        const newMessage: Message = {
-            id: newMessageId,
-            role: 'user',
-            content: text,
-            timestamp: new Date(),
-            attachments: attachments
-        };
-        setSessionMessages(prev => ({
-            ...prev,
-            [currentSessionId]: [...(prev[currentSessionId] || []), newMessage]
-        }));
+        const newMessage: Message = { id: newMessageId, role: 'user', content: text, timestamp: new Date(), attachments: attachments };
+        setSessionMessages(prev => ({ ...prev, [currentSessionId]: [...(prev[currentSessionId] || []), newMessage] }));
     }
-
     setSessionLoading(prev => ({ ...prev, [currentSessionId]: true }));
     const controller = new AbortController();
     abortControllers.current[currentSessionId] = controller;
-
     const currentMsgs = sessionMessages[currentSessionId] || [];
     let aiMessageId = (Date.now() + 1).toString();
     const userMsgIndex = currentMsgs.findIndex(m => m.id === newMessageId);
-    
     if (existingMsgId && userMsgIndex !== -1 && currentMsgs[userMsgIndex + 1]?.role === 'model') {
         aiMessageId = currentMsgs[userMsgIndex + 1].id;
-        setSessionMessages(prev => ({
-            ...prev,
-            [currentSessionId]: prev[currentSessionId].map(m => m.id === aiMessageId ? { ...m, content: '', thoughtProcess: undefined } : m)
-        }));
+        setSessionMessages(prev => ({ ...prev, [currentSessionId]: prev[currentSessionId].map(m => m.id === aiMessageId ? { ...m, content: '', thoughtProcess: undefined } : m) }));
     } else {
-        const initialAiMessage: Message = {
-            id: aiMessageId,
-            role: 'model',
-            content: '',
-            timestamp: new Date(),
-            thoughtProcess: undefined
-        };
+        const initialAiMessage: Message = { id: aiMessageId, role: 'model', content: '', timestamp: new Date(), thoughtProcess: undefined };
         if (existingMsgId && userMsgIndex !== -1) {
             setSessionMessages(prev => {
                 const updated = [...(prev[currentSessionId] || [])];
@@ -661,42 +522,28 @@ export const App: React.FC = () => {
                 return { ...prev, [currentSessionId]: updated };
             });
         } else {
-            setSessionMessages(prev => ({
-                ...prev,
-                [currentSessionId]: [...(prev[currentSessionId] || []), initialAiMessage]
-            }));
+            setSessionMessages(prev => ({ ...prev, [currentSessionId]: [...(prev[currentSessionId] || []), initialAiMessage] }));
         }
     }
-
     try {
         let enhancedText = text;
         let searchThought = "";
-
-        // SEARCH LOGIC
         if (useSearch) {
             let apiKey = '';
             if (searchProvider === 'scira') apiKey = settings.apiKeys.scira;
             else if (searchProvider === 'exa') apiKey = settings.apiKeys.exa;
             else if (searchProvider === 'tavily') apiKey = settings.apiKeys.tavily;
-            
             const providerName = searchProvider === 'scira' ? 'Scira' : (searchProvider === 'exa' ? 'Exa' : 'Tavily');
-
             if (apiKey) {
                 setSessionMessages(prev => {
                     const msgs = prev[currentSessionId] || [];
                     return { ...prev, [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, thoughtProcess: `Searching the web with ${providerName}...` } : m) };
                 });
-
                 try {
                     let searchResult = "";
-                    if (searchProvider === 'scira') {
-                        searchResult = await searchScira(text, apiKey);
-                    } else if (searchProvider === 'exa') {
-                        searchResult = await searchExa(text, apiKey);
-                    } else if (searchProvider === 'tavily') {
-                        searchResult = await searchTavily(text, apiKey);
-                    }
-                    
+                    if (searchProvider === 'scira') searchResult = await searchScira(text, apiKey);
+                    else if (searchProvider === 'exa') searchResult = await searchExa(text, apiKey);
+                    else if (searchProvider === 'tavily') searchResult = await searchTavily(text, apiKey);
                     searchThought = `_**${providerName} Search Performed**_\n\n_Based on your query, I searched for information._\n\n`;
                     enhancedText = `CONTEXT FROM WEB SEARCH (Use this to answer the user request):\n${searchResult}\n\nUSER QUERY:\n${text}`;
                 } catch (err: any) {
@@ -705,11 +552,8 @@ export const App: React.FC = () => {
                 }
             }
         }
-
         const finalMsgsAfterStateUpdate = sessionMessages[currentSessionId] || [];
         const currentIndex = finalMsgsAfterStateUpdate.findIndex(m => m.id === newMessageId);
-        
-        // Construct history, but for the *current* user message (last one), use the potentially enhanced text
         const historyData = finalMsgsAfterStateUpdate.slice(0, currentIndex).map(m => {
             const parts: any[] = [];
             if (m.content && m.content.trim()) parts.push({ text: m.content });
@@ -723,124 +567,56 @@ export const App: React.FC = () => {
             if (parts.length === 0) parts.push({ text: " " });
             return { role: m.role, parts: parts };
         });
-
         const agent = agents.find(a => a.id === modelId);
         let baseInst = settings.baseKnowledge;
         let actualModel = modelId;
-
         if (agent) {
             baseInst = `${agent.systemInstruction}\n\nUser Context: ${settings.baseKnowledge}`;
             actualModel = agent.baseModel;
-            
-            // Inject Connected Tools Context
             if (agent.tools && agent.tools.length > 0) {
                 const toolDescriptions = agent.tools.map(t => {
                     if (t.type === 'mcp') return `- MCP Server: ${t.config} (Connected)`;
                     if (t.type === 'api_linear') return `- Linear API Integration (Connected via Key)`;
                     return `- ${t.name}: ${t.config}`;
                 }).join('\n');
-                
                 baseInst += `\n\nCONNECTED CAPABILITIES:\nYou have been connected to the following external tools and APIs:\n${toolDescriptions}\n\nWhen the user asks to interact with these services (e.g. "Create a linear issue", "Read craft doc"), assume you have the capability to do so via function calling or context retrieval.`;
             }
         }
-
         const systemInstruction = `${baseInst}\n\n${getSystemInstruction(settings.userName, mode, availableLabels)}`;
-        
         const onStreamUpdate = (content: string, thoughtProcess?: string) => {
             setSessionMessages(prev => {
                 const msgs = prev[currentSessionId] || [];
                 const combinedThought = (searchThought ? searchThought + (thoughtProcess ? '\n---\n' : '') : '') + (thoughtProcess || '');
-                return {
-                    ...prev,
-                    [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, content, thoughtProcess: combinedThought || undefined } : m)
-                };
+                return { ...prev, [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, content, thoughtProcess: combinedThought || undefined } : m) };
             });
         };
-
         let response;
         if (mode === 'council' && activeSession?.councilModels) {
-            setSessionMessages(prev => ({
-                ...prev,
-                [currentSessionId]: (prev[currentSessionId] || []).map(m => m.id === aiMessageId ? { ...m, thoughtProcess: 'Convening the Council: Models are deliberating in parallel...', model: 'council' } : m)
-            }));
-
-            // Fetch parallel responses
+            setSessionMessages(prev => ({ ...prev, [currentSessionId]: (prev[currentSessionId] || []).map(m => m.id === aiMessageId ? { ...m, thoughtProcess: 'Convening the Council: Models are deliberating in parallel...', model: 'council' } : m) }));
             const modelResponses = await Promise.all(activeSession.councilModels.map(async (mId) => {
-                const res = await sendMessageToGemini(
-                    enhancedText, 
-                    historyData, 
-                    systemInstruction, 
-                    attachments, 
-                    false, 
-                    undefined, 
-                    settings.apiKeys, 
-                    mId,
-                    'explore', 
-                    controller.signal
-                );
+                const res = await sendMessageToGemini(enhancedText, historyData, systemInstruction, attachments, false, undefined, settings.apiKeys, mId, 'explore', controller.signal);
                 return { model: mId, text: res.text };
             }));
-
             const responsesText = modelResponses.map(r => `Response from [${r.model}]:\n${r.text}`).join('\n\n---\n\n');
-
-            const synthesisPrompt = `You are the Council Synthesizer. Review the following responses from different AI models to the user query: "${text}". 
-            Resolve conflicts where possible, highlight key differences, and present a final unified answer. 
-            MANDATORY: Include a comparison table showing where the models agree and disagree.
-            
-            ${responsesText}`;
-
+            const synthesisPrompt = `You are the Council Synthesizer. Review the following responses from different AI models to the user query: "${text}". Resolve conflicts where possible, highlight key differences, and present a final unified answer. MANDATORY: Include a comparison table showing where the models agree and disagree.\n\n${responsesText}`;
             response = await sendMessageToGemini(synthesisPrompt, historyData, systemInstruction, [], false, onStreamUpdate, settings.apiKeys, 'gemini-3-flash-preview', 'explore', controller.signal);
-            
-            // Append the raw outputs to the synthesized response
             let finalOutput = response.text + "\n\n---\n\n### 🏛️ Council Records\n\n";
-            
             modelResponses.forEach(r => {
                 const modelName = r.model.split('/').pop()?.split(':')[0] || r.model;
                 finalOutput += `<details><summary><strong>${modelName}</strong></summary>\n\n${r.text}\n\n</details>\n\n`;
             });
-            
             response.text = finalOutput;
-
         } else {
-            response = await sendMessageToGemini(
-                enhancedText, 
-                historyData, 
-                systemInstruction, 
-                attachments, 
-                mode === 'execute', 
-                onStreamUpdate,
-                settings.apiKeys,
-                actualModel,
-                mode,
-                controller.signal
-            );
+            response = await sendMessageToGemini(enhancedText, historyData, systemInstruction, attachments, mode === 'execute', onStreamUpdate, settings.apiKeys, actualModel, mode, controller.signal);
         }
-        
         let cleanText = executeAICommands(response.text, currentSessionId);
-        
-        // Fallback for models that might return empty content but have valid reasoning (e.g. specialized thinking models)
-        if (!cleanText && (response.thoughtProcess || searchThought) && mode !== 'council') {
-             // If we have thoughts but no content, check if we should just show thoughts or error
-             // We can leave cleanText empty, but ensure thoughtProcess is updated. 
-             // Ideally we might want to prompt user to check thoughts.
-        } else if (!cleanText && !response.thoughtProcess && !searchThought) {
-             cleanText = "Error: The model returned an empty response.";
-        }
-        
+        if (!cleanText && (response.thoughtProcess || searchThought) && mode !== 'council') { } else if (!cleanText && !response.thoughtProcess && !searchThought) { cleanText = "Error: The model returned an empty response."; }
         setSessionMessages(prev => {
             const msgs = prev[currentSessionId] || [];
             const combinedThought = (searchThought ? searchThought + (response.thoughtProcess ? '\n---\n' : '') : '') + (response.thoughtProcess || '');
-            return {
-                ...prev,
-                [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, content: cleanText, thoughtProcess: combinedThought || undefined, model: mode === 'council' ? 'council' : actualModel } : m)
-            };
+            return { ...prev, [currentSessionId]: msgs.map(m => m.id === aiMessageId ? { ...m, content: cleanText, thoughtProcess: combinedThought || undefined, model: mode === 'council' ? 'council' : actualModel } : m) };
         });
-
-        // Use Ref to check against the CURRENT active session, avoiding stale closure
-        if (currentSessionId !== activeSessionIdRef.current) {
-            setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === currentSessionId ? { ...s, hasNewResponse: true } : s) : prev);
-        }
-
+        if (currentSessionId !== activeSessionIdRef.current) setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === currentSessionId ? { ...s, hasNewResponse: true } : s) : prev);
     } catch (e: any) {
         if (e.name === 'AbortError') return;
         console.error("Failed to send message", e);
@@ -855,89 +631,46 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleClearData = () => {
-    localStorage.clear();
-    window.location.reload();
-  };
-
-  const handleRepairWorkspace = () => {
-    setSessions([]);
-    setSessionMessages({});
-    setAvailableLabels(DEFAULT_LABELS);
-    setActiveSessionId(null);
-    handleNewSession();
-  };
-
+  const handleClearData = () => { localStorage.clear(); window.location.reload(); };
+  const handleRepairWorkspace = () => { setSessions([]); setSessionMessages({}); setAvailableLabels(DEFAULT_LABELS); setActiveSessionId(null); handleNewSession(); };
   const handleImportWorkspace = (data: any) => {
       if (!data) return;
       try {
-          // Basic Validation
           if (!data.settings || !data.sessions) throw new Error("Invalid backup file");
-
-          // Merge settings to ensure new fields (like apiKeys) are present
-          const mergedSettings = {
-              ...DEFAULT_SETTINGS,
-              ...data.settings,
-              apiKeys: {
-                  ...DEFAULT_SETTINGS.apiKeys,
-                  ...(data.settings.apiKeys || {})
-              }
-          };
-
-          // Direct LocalStorage Write to prevent React state race conditions during restore
+          const mergedSettings = { ...DEFAULT_SETTINGS, ...data.settings, apiKeys: { ...DEFAULT_SETTINGS.apiKeys, ...(data.settings.apiKeys || {}) } };
           try {
               window.localStorage.setItem('shuper_settings', JSON.stringify(mergedSettings));
               window.localStorage.setItem('shuper_sessions', JSON.stringify(data.sessions));
-              
               if (data.messages) window.localStorage.setItem('shuper_messages', JSON.stringify(data.messages));
               if (data.agents) window.localStorage.setItem('shuper_agents', JSON.stringify(data.agents));
               if (data.labels) window.localStorage.setItem('shuper_labels', JSON.stringify(data.labels));
               if (data.sessionModels) window.localStorage.setItem('shuper_session_models', JSON.stringify(data.sessionModels));
-          } catch (e: any) {
-              if (e.name === 'QuotaExceededError') {
-                  alert('Storage limit exceeded. Import failed. Try clearing data first.');
-                  return;
-              }
-              throw e;
-          }
-          
-          // Force reload to apply changes from a clean state
+          } catch (e: any) { if (e.name === 'QuotaExceededError') { alert('Storage limit exceeded. Import failed.'); return; } throw e; }
           window.location.reload(); 
-      } catch (e) {
-          console.error("Import failed", e);
-          alert('Failed to import workspace. The file might be corrupted.');
-      }
+      } catch (e) { alert('Failed to import workspace.'); }
   };
 
   const updateSessionStatus = (id: string, s: SessionStatus) => setSessions(prev => Array.isArray(prev) ? prev.map(sess => sess.id === id ? { ...sess, status: s } : sess) : prev);
   const updateSessionMode = (id: string, m: SessionMode) => setSessions(prev => Array.isArray(prev) ? prev.map(sess => sess.id === id ? { ...sess, mode: m } : sess) : prev);
-  const updateSessionLabels = (id: string, lid: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => {
-      if (s.id !== id) return s;
-      const hasLabel = s.labelIds.includes(lid);
-      return { ...s, labelIds: hasLabel ? s.labelIds.filter(x => x !== lid) : [...s.labelIds, lid] };
-  }) : prev);
+  const updateSessionLabels = (id: string, lid: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => { if (s.id !== id) return s; const hasLabel = s.labelIds.includes(lid); return { ...s, labelIds: hasLabel ? s.labelIds.filter(x => x !== lid) : [...s.labelIds, lid] }; }) : prev);
   const toggleSessionFlag = (id: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, isFlagged: !s.isFlagged } : s) : prev);
   const updateCouncilModels = (id: string, models: string[]) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, councilModels: models } : s) : prev);
   const handleMarkUnread = (id: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, hasNewResponse: true } : s) : prev);
 
   const deleteSession = (id: string) => {
-      const messages = sessionMessages[id] || [];
-      if (messages.length === 0) {
-          // If this is the last session, replace it with a new one
+      const messagesCount = (sessionMessages[id] || []).length;
+      if (messagesCount === 0) {
           if (sessions.length === 1 && sessions[0].id === id) {
               const newSession = createSessionObject();
               setSessions([newSession]);
               setSessionMessages({ [newSession.id]: [] });
               setActiveSessionId(newSession.id);
-              // Only default model if present
               if (hasAnyKey && (settings.defaultModel || settings.visibleModels.length > 0)) {
-                  const defaultModel = settings.defaultModel || settings.visibleModels[0];
-                  setSessionModels({ [newSession.id]: defaultModel });
+                  setSessionModels({ [newSession.id]: settings.defaultModel || settings.visibleModels[0] });
               }
               return;
           }
-
-          setSessions(prev => Array.isArray(prev) ? prev.filter(s => s.id !== id) : prev);
+          setSessions(prev => prev.filter(s => s.id !== id));
           if (activeSessionId === id) {
               const remaining = sessions.filter(s => s.id !== id);
               if (remaining.length > 0) handleSelectSession(remaining[0].id);
@@ -953,45 +686,42 @@ export const App: React.FC = () => {
       if (!deleteConfirmation) return;
       if (deleteConfirmation.type === 'chat') {
           const id = deleteConfirmation.id;
-          
           if (sessions.length === 1 && sessions[0].id === id) {
               const newSession = createSessionObject();
               setSessions([newSession]);
-              setSessionMessages(prev => {
-                  const newState = { ...prev };
-                  delete newState[id];
-                  newState[newSession.id] = [];
-                  return newState;
-              });
+              setSessionMessages(prev => { const n = { ...prev }; delete n[id]; n[newSession.id] = []; return n; });
               setActiveSessionId(newSession.id);
+              navigateTo('chat', newSession.id); // Explicit selection
               if (hasAnyKey && (settings.defaultModel || settings.visibleModels.length > 0)) {
-                  const defaultModel = settings.defaultModel || settings.visibleModels[0];
-                  setSessionModels(prev => {
-                      const newState = { ...prev };
-                      delete newState[id];
-                      newState[newSession.id] = defaultModel;
-                      return newState;
-                  });
+                  setSessionModels(prev => { const n = { ...prev }; delete n[id]; n[newSession.id] = settings.defaultModel || settings.visibleModels[0]; return n; });
               }
           } else {
-              setSessions(prev => Array.isArray(prev) ? prev.filter(s => s.id !== id) : prev);
+              const remaining = sessions.filter(s => s.id !== id);
+              setSessions(remaining);
               if (activeSessionId === id) {
-                  const remaining = sessions.filter(s => s.id !== id);
                   if (remaining.length > 0) handleSelectSession(remaining[0].id);
                   else setActiveSessionId(null);
               }
           }
-      } else {
-          setAgents(prev => prev.filter(a => a.id !== deleteConfirmation.id));
-      }
+      } else { setAgents(prev => prev.filter(a => a.id !== deleteConfirmation.id)); }
       setDeleteConfirmation(null);
   };
 
-  const renameSession = (id: string, t: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, title: t } : s) : prev);
-  const handleUpdateAgent = (updatedAgent: Agent) => setAgents(prev => prev.map(a => a.id === updatedAgent.id ? updatedAgent : a));
-  const deleteAgent = (id: string) => {
-      const agent = agents.find(a => a.id === id);
-      setDeleteConfirmation({ type: 'agent', id, title: agent?.name || 'this agent' });
+  const renameSession = (id: string, t: string) => setSessions(prev => prev.map(s => s.id === id ? { ...s, title: t } : s));
+  const handleUpdateAgent = (u: Agent) => setAgents(prev => prev.map(a => a.id === u.id ? u : a));
+  const deleteAgent = (id: string) => { const a = agents.find(x => x.id === id); setDeleteConfirmation({ type: 'agent', id, title: a?.name || 'this agent' }); };
+
+  // Handle logo click with an easter egg effect
+  const handleLogoClick = () => {
+    setLogoClicks(prev => {
+      const newVal = prev + 1;
+      if (newVal >= 7) {
+        setIsLogoGlowing(true);
+        setTimeout(() => setIsLogoGlowing(false), 5000);
+        return 0;
+      }
+      return newVal;
+    });
   };
 
   return (
@@ -1005,198 +735,42 @@ export const App: React.FC = () => {
             }} 
           />
       )}
-
       <div className={`flex w-full h-full ${isLanding ? 'animate-workspace-enter' : ''}`}>
         {isTourActive && (
             <TourOverlay 
-                onComplete={() => {
-                    setSettings({ ...settings, onboardingComplete: true });
-                    setIsTourActive(false);
-                }} 
-                onSkip={() => {
-                    setSettings({ ...settings, onboardingComplete: true });
-                    setIsTourActive(false);
-                }}
-                onNewSession={() => {
-                    if (sessions.length === 0) handleNewSession();
-                    navigateTo('chat');
-                }}
+                onComplete={() => { setSettings({ ...settings, onboardingComplete: true }); setIsTourActive(false); }} 
+                onSkip={() => { setSettings({ ...settings, onboardingComplete: true }); setIsTourActive(false); }}
+                onNewSession={() => { if (sessions.length === 0) handleNewSession(); navigateTo('chat'); }}
             />
         )}
-
         {deleteConfirmation && (
-            <DeleteConfirmationModal 
-                title={deleteConfirmation.title}
-                description={deleteConfirmation.type === 'chat' ? 'this chat' : 'this agent'}
-                onConfirm={handleConfirmDelete}
-                onCancel={() => setDeleteConfirmation(null)}
-            />
+            <DeleteConfirmationModal title={deleteConfirmation.title} description={deleteConfirmation.type === 'chat' ? 'this chat' : 'this agent'} onConfirm={handleConfirmDelete} onCancel={() => setDeleteConfirmation(null)} />
         )}
-
-        {isMobileSidebarOpen && (
-            <div className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-in fade-in duration-300" onClick={() => setIsMobileSidebarOpen(false)} />
-        )}
-
-        <div className={`
-            fixed md:relative inset-y-0 left-0 z-50 
-            transform transition-all duration-500 ease-in-out 
-            ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-            ${isSidebarVisible ? 'md:translate-x-0 md:w-[260px] md:opacity-100 md:visible' : 'md:-translate-x-full md:w-0 md:opacity-0 md:invisible'}
-            overflow-hidden h-full bg-[var(--bg-primary)]
-        `}>
-            <SidebarNavigation 
-                currentFilter={currentFilter} 
-                onSetFilter={(f) => {
-                    setCurrentFilter(f);
-                    setIsMobileSidebarOpen(false);
-                    setIsMobileSessionListOpen(true);
-                }} 
-                onNewSession={() => {
-                    handleNewSession();
-                    setIsMobileSidebarOpen(false);
-                }}
-                onBack={handleBack}
-                onForward={handleForward}
-                canBack={historyIndex > 0}
-                canForward={historyIndex < history.length - 1}
-                statusCounts={statusCounts}
-                availableLabels={availableLabels}
-                currentView={currentView}
-                onChangeView={(v) => {
-                    navigateTo(v);
-                    setIsMobileSidebarOpen(false);
-                }}
-                workspaceName={settings.workspaceName}
-                workspaceIcon={settings.workspaceIcon}
-                onShowWhatsNew={() => setIsWhatsNewOpen(true)}
-                onCloseMobile={() => setIsMobileSidebarOpen(false)}
-                onLogoClick={handleLogoClick}
-                isLogoGlowing={isLogoGlowing}
-            />
+        {isMobileSidebarOpen && <div className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-in fade-in duration-300" onClick={() => setIsMobileSidebarOpen(false)} />}
+        <div className={`fixed md:relative inset-y-0 left-0 z-50 transform transition-all duration-500 ease-in-out ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarVisible ? 'md:translate-x-0 md:w-[260px] md:opacity-100 md:visible' : 'md:-translate-x-full md:w-0 md:opacity-0 md:invisible'} overflow-hidden h-full bg-[var(--bg-primary)]`}>
+            <SidebarNavigation currentFilter={currentFilter} onSetFilter={(f) => { setCurrentFilter(f); setIsMobileSidebarOpen(false); setIsMobileSessionListOpen(true); }} onNewSession={() => { handleNewSession(); setIsMobileSidebarOpen(false); }} onBack={handleBack} onForward={handleForward} canBack={historyIndex > 0} canForward={historyIndex < history.length - 1} statusCounts={statusCounts} availableLabels={availableLabels} currentView={currentView} onChangeView={(v) => { navigateTo(v); setIsMobileSidebarOpen(false); }} workspaceName={settings.workspaceName} workspaceIcon={settings.workspaceIcon} onShowWhatsNew={() => setIsWhatsNewOpen(true)} onCloseMobile={() => setIsMobileSidebarOpen(false)} onLogoClick={handleLogoClick} isLogoGlowing={isLogoGlowing} />
         </div>
-
         {isWhatsNewOpen && <WhatsNewModal isOpen={isWhatsNewOpen} onClose={() => setIsWhatsNewOpen(false)} />}
-
         <div className="flex-1 flex overflow-hidden relative p-0 md:p-6 md:pl-0 md:gap-4 transition-all duration-500">
             {currentView === 'chat' && (
                 <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 gap-0 md:gap-4 overflow-hidden h-full">
-                    <div className={`
-                        w-full md:w-[300px] flex-shrink-0 
-                        transition-all duration-500 ease-in-out
-                        ${isMobileSessionListOpen ? 'block' : 'hidden'} 
-                        ${isSubSidebarVisible ? 'md:translate-x-0 md:w-[300px] md:opacity-100 md:visible' : 'md:-translate-x-full md:w-0 md:opacity-0 md:invisible'}
-                        md:block rounded-none md:rounded-2xl overflow-hidden island-card h-full
-                    `}>
-                        <SessionList 
-                            sessions={filteredSessions} 
-                            activeSessionId={activeSessionId || ''} 
-                            onSelectSession={handleSelectSession}
-                            onUpdateSessionStatus={updateSessionStatus} 
-                            onDeleteSession={deleteSession}
-                            onRenameSession={renameSession}
-                            onRegenerateTitle={handleRegenerateTitle}
-                            availableLabels={availableLabels}
-                            onToggleLabel={updateSessionLabels}
-                            onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])}
-                            sessionLoading={sessionLoading}
-                            onNewSession={handleNewSession}
-                            onToggleFlag={toggleSessionFlag}
-                            currentFilter={currentFilter}
-                            onOpenSidebar={() => setIsMobileSidebarOpen(true)}
-                            triggerSearch={triggerSearch}
-                            onEditTitle={(val) => setIsEditingTitle(val)}
-                            onMarkUnread={handleMarkUnread}
-                        />
+                    <div className={`w-full md:w-[300px] flex-shrink-0 transition-all duration-500 ease-in-out ${isMobileSessionListOpen ? 'block' : 'hidden'} ${isSubSidebarVisible ? 'md:translate-x-0 md:w-[300px] md:opacity-100 md:visible' : 'md:-translate-x-full md:w-0 md:opacity-0 md:invisible'} md:block rounded-none md:rounded-2xl overflow-hidden island-card h-full`}>
+                        <SessionList sessions={filteredSessions} activeSessionId={activeSessionId || ''} onSelectSession={handleSelectSession} onUpdateSessionStatus={updateSessionStatus} onDeleteSession={deleteSession} onRenameSession={renameSession} onRegenerateTitle={handleRegenerateTitle} availableLabels={availableLabels} onToggleLabel={updateSessionLabels} onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])} sessionLoading={sessionLoading} onNewSession={handleNewSession} onToggleFlag={toggleSessionFlag} currentFilter={currentFilter} onOpenSidebar={() => setIsMobileSidebarOpen(true)} triggerSearch={triggerSearch} onEditTitle={(val) => setIsEditingTitle(val)} onMarkUnread={handleMarkUnread} />
                     </div>
-                    
                     <div className={`flex-1 transition-all duration-300 h-full ${!isMobileSessionListOpen || !activeSessionId ? 'block' : 'hidden md:block'} rounded-none md:rounded-2xl overflow-hidden island-card h-full`}>
                         {activeSession ? (
-                            <ChatInterface 
-                                key={activeSession.id}
-                                session={activeSession}
-                                messages={activeMessages} 
-                                onSendMessage={handleSendMessage}
-                                onStopGeneration={() => handleStopGeneration(activeSessionId!)}
-                                isLoading={activeLoading}
-                                onUpdateStatus={(status) => updateSessionStatus(activeSessionId!, status)}
-                                onUpdateMode={(mode) => updateSessionMode(activeSessionId!, mode)}
-                                availableLabels={availableLabels}
-                                onUpdateLabels={(labelId) => updateSessionLabels(activeSessionId!, labelId)}
-                                onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])}
-                                onDeleteSession={() => deleteSession(activeSessionId!)}
-                                onRenameSession={(title) => renameSession(activeSessionId!, title)}
-                                onRegenerateTitle={handleRegenerateTitle}
-                                onToggleFlag={() => toggleSessionFlag(activeSessionId!)}
-                                onChangeView={(v) => navigateTo(v)}
-                                onNewSession={handleNewSession}
-                                visibleModels={settings.visibleModels}
-                                agents={agents}
-                                currentModel={activeSessionId ? (sessionModels[activeSessionId] || '') : ''}
-                                onSelectModel={(m) => {
-                                    if(activeSessionId) setSessionModels(prev => ({...prev, [activeSessionId]: m}));
-                                }}
-                                onUpdateCouncilModels={(models) => updateCouncilModels(activeSessionId!, models)}
-                                sendKey={settings.sendKey}
-                                hasOpenRouterKey={!!(settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt)}
-                                hasRoutewayKey={!!settings.apiKeys.routeway}
-                                hasSciraKey={!!settings.apiKeys.scira}
-                                hasExaKey={!!settings.apiKeys.exa}
-                                hasTavilyKey={!!settings.apiKeys.tavily}
-                                onBackToList={() => setIsMobileSessionListOpen(true)}
-                                onOpenSidebar={() => setIsMobileSidebarOpen(true)}
-                                hasAnyKey={hasAnyKey}
-                                userSettings={settings}
-                                draftValue={activeSessionId ? (sessionDrafts[activeSessionId] || '') : ''}
-                                onDraftChange={(val) => {
-                                    if(activeSessionId) setSessionDrafts(prev => ({...prev, [activeSessionId]: val}));
-                                }}
-                                isEditingTitle={isEditingTitle}
-                                setIsEditingTitle={setIsEditingTitle}
-                            />
+                            <ChatInterface key={activeSession.id} session={activeSession} messages={activeMessages} onSendMessage={handleSendMessage} onStopGeneration={() => handleStopGeneration(activeSessionId!)} isLoading={activeLoading} onUpdateStatus={(status) => updateSessionStatus(activeSessionId!, status)} onUpdateMode={(mode) => updateSessionMode(activeSessionId!, mode)} availableLabels={availableLabels} onUpdateLabels={(labelId) => updateSessionLabels(activeSessionId!, labelId)} onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])} onDeleteSession={() => deleteSession(activeSessionId!)} onRenameSession={(title) => renameSession(activeSessionId!, title)} onRegenerateTitle={handleRegenerateTitle} onToggleFlag={() => toggleSessionFlag(activeSessionId!)} onChangeView={(v) => navigateTo(v)} onNewSession={handleNewSession} visibleModels={settings.visibleModels} agents={agents} currentModel={activeSessionId ? (sessionModels[activeSessionId] || '') : ''} onSelectModel={(m) => { if(activeSessionId) setSessionModels(prev => ({...prev, [activeSessionId]: m})); }} onUpdateCouncilModels={(models) => updateCouncilModels(activeSessionId!, models)} sendKey={settings.sendKey} hasOpenRouterKey={!!(settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt)} hasRoutewayKey={!!settings.apiKeys.routeway} hasSciraKey={!!settings.apiKeys.scira} hasExaKey={!!settings.apiKeys.exa} hasTavilyKey={!!settings.apiKeys.tavily} onBackToList={() => setIsMobileSessionListOpen(true)} onOpenSidebar={() => setIsMobileSidebarOpen(true)} hasAnyKey={hasAnyKey} userSettings={settings} draftValue={activeSessionId ? (sessionDrafts[activeSessionId] || '') : ''} onDraftChange={(val) => { if(activeSessionId) setSessionDrafts(prev => ({...prev, [activeSessionId]: val})); }} isEditingTitle={isEditingTitle} setIsEditingTitle={setIsEditingTitle} />
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-[var(--text-dim)] bg-[var(--bg-tertiary)] flex-col gap-2 h-full">
-                                <div className="md:hidden absolute top-4 left-4">
-                                    <button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 bg-[var(--bg-elevated)] rounded-lg text-[var(--text-main)]">
-                                        <Menu className="w-5 h-5" />
-                                    </button>
-                                </div>
-                                <div className="w-16 h-16 rounded-2xl bg-[var(--bg-elevated)] flex items-center justify-center mb-4 shadow-lg">
-                                    <Loader2 className="w-6 h-6 text-[var(--accent)] animate-spin" strokeWidth={2} />
-                                </div>
+                                <div className="md:hidden absolute top-4 left-4"><button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 bg-[var(--bg-elevated)] rounded-lg text-[var(--text-main)]"><Menu className="w-5 h-5" /></button></div>
+                                <div className="w-16 h-16 rounded-2xl bg-[var(--bg-elevated)] flex items-center justify-center mb-4 shadow-lg"><Loader2 className="w-6 h-6 text-[var(--accent)] animate-spin" strokeWidth={2} /></div>
                             </div>
                         )}
                     </div>
                 </div>
             )}
-
-            {currentView === 'settings' && (
-                <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 rounded-none md:rounded-2xl overflow-hidden island-card h-full">
-                    <SettingsView 
-                        settings={settings} 
-                        onUpdateSettings={handleUpdateSettings}
-                        labels={availableLabels}
-                        onUpdateLabels={setAvailableLabels}
-                        onClearData={handleClearData}
-                        onRepairWorkspace={handleRepairWorkspace}
-                        sessions={sessions}
-                        messages={sessionMessages}
-                        agents={agents}
-                        sessionModels={sessionModels}
-                        onImportWorkspace={handleImportWorkspace}
-                    />
-                </div>
-            )}
-
-            {currentView === 'agents' && (
-                <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 rounded-none md:rounded-2xl overflow-hidden island-card h-full">
-                    <AgentsView 
-                        agents={agents}
-                        onCreateAgent={(a) => setAgents(prev => [...prev, a])}
-                        onDeleteAgent={deleteAgent}
-                        onUpdateAgent={handleUpdateAgent}
-                    />
-                </div>
-            )}
+            {currentView === 'settings' && <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 rounded-none md:rounded-2xl overflow-hidden island-card h-full"><SettingsView settings={settings} onUpdateSettings={handleUpdateSettings} labels={availableLabels} onUpdateLabels={setAvailableLabels} onClearData={handleClearData} onRepairWorkspace={handleRepairWorkspace} sessions={sessions} messages={sessionMessages} agents={agents} sessionModels={sessionModels} onImportWorkspace={handleImportWorkspace} /></div>}
+            {currentView === 'agents' && <div className="flex flex-1 animate-in fade-in zoom-in-95 duration-300 rounded-none md:rounded-2xl overflow-hidden island-card h-full"><AgentsView agents={agents} onCreateAgent={(a) => setAgents(prev => [...prev, a])} onDeleteAgent={deleteAgent} onUpdateAgent={handleUpdateAgent} /></div>}
         </div>
       </div>
     </div>
