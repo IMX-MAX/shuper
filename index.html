@@ -53,7 +53,7 @@
         --selection-bg: rgba(203, 166, 247, 0.35);
       }
       body[data-theme="Dracula"]:not(.light-mode) {
-        --bg-primary: #282a36; --bg-secondary: #1e1f29; --bg-tertiary: #44475a; --bg-elevated: #6272a4;
+        --bg-primary: #282828; --bg-secondary: #1e1f29; --bg-tertiary: #44475a; --bg-elevated: #6272a4;
         --border: rgba(98, 114, 164, 0.2); --text-main: #f8f8f2; --text-muted: #bd93f9; --text-dim: #6272a4; --accent: #ff79c6; --input-bg: #191a21;
         --selection-bg: rgba(189, 147, 249, 0.4);
       }
@@ -393,7 +393,8 @@
       .markdown-body pre code { background: transparent; padding: 0; font-weight: 400; }
       
       /* KaTeX & Math support adjustments */
-      .katex-display { margin: 1em 0; overflow-x: auto; overflow-y: hidden; }
+      .katex-display { margin: 1em 0; overflow-x: visible; overflow-y: hidden; }
+      .katex { font-size: 1.1em; line-height: 1.2; white-space: normal; }
       
       /* Table Support */
       .markdown-body table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 13px; }

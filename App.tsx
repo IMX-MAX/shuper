@@ -66,7 +66,7 @@ STRICT CONVERSATION RULES:
 1. NO SIGN-OFFS. Just answer the question.
 2. NO META-TALK. Don't explain your thoughts in brackets.
 3. BE DIRECT. Get straight to the point.
-4. BE PERSONAL. Use the user's name (${userName}) naturally.
+4. BE PERSONAL. You can use the user's name (${userName}) if it feels natural, but don't feel forced to use it in every response.
 
 5. MATH FORMATTING (CRITICAL):
    - USE LATEX FOR EVERYTHING: ALL mathematical expressions, formulas, coordinates, and variables.
@@ -352,6 +352,8 @@ export const App: React.FC = () => {
     applyHistoryState(newState);
   }, [history, historyIndex, applyHistoryState]);
 
+  const updateSessionMode = useCallback((id: string, m: SessionMode) => setSessions(prev => Array.isArray(prev) ? prev.map(sess => sess.id === id ? { ...sess, mode: m } : sess) : prev), []);
+
   useEffect(() => {
     if (currentView === 'chat' && !activeSessionId && Array.isArray(sessions) && sessions.length > 0) {
       navigateTo('chat', sessions[0].id);
@@ -364,8 +366,20 @@ export const App: React.FC = () => {
       
       const isMod = e.altKey || e.metaKey; // Support both Alt (Option on Mac) and Meta (Command on Mac)
 
-      // Sidebar Toggle: Alt + , OR Command + ,
-      if (isMod && (e.key === ',' || e.code === 'Comma')) {
+      // Shift + Tab to Toggle Mode
+      if (e.shiftKey && e.key === 'Tab') {
+        e.preventDefault();
+        if (activeSessionId) {
+            const currentMode = sessions.find(s => s.id === activeSessionId)?.mode || 'explore';
+            const modes: SessionMode[] = ['explore', 'execute', 'council'];
+            const nextMode = modes[(modes.indexOf(currentMode) + 1) % modes.length];
+            updateSessionMode(activeSessionId, nextMode);
+        }
+        return;
+      }
+
+      // Sidebar Toggle: Alt + . OR Command + .
+      if (isMod && (e.key === '.' || e.code === 'Period')) {
         e.preventDefault();
         const shouldBeVisible = !isSidebarVisible || !isSubSidebarVisible;
         setIsSidebarVisible(shouldBeVisible);
@@ -385,7 +399,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleGlobalShortcuts);
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
-  }, [sessions, currentView, activeSessionId, handleBack, handleForward, isSidebarVisible, isSubSidebarVisible, navigateTo]);
+  }, [sessions, currentView, activeSessionId, handleBack, handleForward, isSidebarVisible, isSubSidebarVisible, navigateTo, updateSessionMode]);
 
   useEffect(() => {
       if (settings.onboardingComplete) {
@@ -684,7 +698,6 @@ export const App: React.FC = () => {
   };
 
   const updateSessionStatus = (id: string, s: SessionStatus) => setSessions(prev => Array.isArray(prev) ? prev.map(sess => sess.id === id ? { ...sess, status: s } : sess) : prev);
-  const updateSessionMode = (id: string, m: SessionMode) => setSessions(prev => Array.isArray(prev) ? prev.map(sess => sess.id === id ? { ...sess, mode: m } : sess) : prev);
   const updateSessionLabels = (id: string, lid: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => { if (s.id !== id) return s; const hasLabel = s.labelIds.includes(lid); return { ...s, labelIds: hasLabel ? s.labelIds.filter(x => x !== lid) : [...s.labelIds, lid] }; }) : prev);
   const toggleSessionFlag = (id: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, isFlagged: !s.isFlagged } : s) : prev);
   const updateCouncilModels = (id: string, models: string[]) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, councilModels: models } : s) : prev);
