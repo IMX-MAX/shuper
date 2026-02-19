@@ -36,7 +36,8 @@ import {
   Upload,
   Globe,
   Network,
-  Cpu
+  Cpu,
+  BookOpen
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -124,7 +125,7 @@ const ModelList = ({ title, models, visibleModels, onToggle, disabled }: { title
                         <div 
                             key={model} 
                             onClick={() => onToggle(model)}
-                            className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-[var(--bg-elevated)] transition-all cursor-pointer group"
+                            className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-[var(--bg-elevated)] transition-all duration-200 cursor-pointer group"
                         >
                             <span className="text-[13px] font-medium truncate max-w-[80%] text-[var(--text-muted)] group-hover:text-[var(--text-main)]">{model}</span>
                             <div className={`w-8 h-4.5 rounded-full relative transition-all duration-300 ${visibleModels.includes(model) ? 'bg-[var(--accent)]' : 'bg-[var(--bg-elevated)] border border-[var(--border)]'}`}>
@@ -299,7 +300,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             {keys.map((k, i) => (
                 <React.Fragment key={i}>
                     <kbd className="min-w-[28px] px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg text-[10px] font-bold text-[var(--text-main)] shadow-sm flex items-center justify-center uppercase tracking-tighter">
-                        {k === 'Alt' && isMac ? 'Option' : k}
+                        {k === 'Alt' && isMac ? 'Option' : (k === 'Cmd' ? 'Command' : k)}
                     </kbd>
                     {i < keys.length - 1 && <span className="text-[var(--text-dim)] font-bold self-center text-[10px]">+</span>}
                 </React.Fragment>
@@ -359,7 +360,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               {activeTab === 'general' && (
                   <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
-                      {/* ... General Settings ... */}
                       <div className="island-card border border-[var(--border)] rounded-3xl p-6 md:p-8 space-y-8 shadow-sm bg-[var(--bg-secondary)]">
                           <div className="flex items-center gap-6">
                               <div className="relative group">
@@ -404,6 +404,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                       />
                                   </div>
                               </div>
+                          </div>
+                      </div>
+
+                      <div className="island-card border border-[var(--border)] rounded-3xl p-6 md:p-8 space-y-6 shadow-sm bg-[var(--bg-secondary)]">
+                          <h3 className="font-bold text-lg text-[var(--text-main)]">Resources</h3>
+                          <div className="grid grid-cols-1 gap-4">
+                              <a 
+                                href="https://shuper.nafen.sbs" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-4 px-6 py-5 rounded-2xl bg-[var(--bg-tertiary)] border border-[var(--border)] hover:bg-[var(--bg-elevated)] transition-all group text-[var(--text-main)] no-underline hover:border-[var(--text-dim)]"
+                              >
+                                  <BookOpen className="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform" />
+                                  <div className="flex flex-col items-center">
+                                      <span className="text-sm font-bold">Documentation & Tutorials</span>
+                                      <span className="text-[10px] text-[var(--text-dim)] font-medium mt-0.5">Learn how to master Shuper at shuper.nafen.sbs</span>
+                                  </div>
+                              </a>
                           </div>
                       </div>
 
@@ -554,7 +572,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
               )}
 
-              {/* ... other tabs ... */}
               {activeTab === 'instructions' && (
                   <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
                       <div className="island-card border border-[var(--border)] rounded-3xl p-6 md:p-8 space-y-6 shadow-sm bg-[var(--bg-secondary)]">
@@ -597,7 +614,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                         onClick={() => onUpdateSettings({ ...settings, sendKey: opt.id as any })}
                                         className={`p-5 rounded-2xl border cursor-pointer transition-all ${
                                             settings.sendKey === opt.id 
-                                                ? 'bg-[var(--bg-elevated)] border-[var(--text-muted)] shadow-md' 
+                                                ? 'bg-[var(--bg-elevated)] border-[var(--border)] shadow-md' 
                                                 : 'bg-[var(--bg-tertiary)] border-[var(--border)] hover:border-[var(--text-dim)]'
                                         }`}
                                       >
@@ -702,12 +719,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
                        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-3xl p-4 md:p-8 space-y-6 shadow-sm island-card">
                           <div className="grid grid-cols-1 gap-3">
-                              <ShortcutItem keys={['Alt', 'N']} label="New Chat" />
-                              <ShortcutItem keys={['Alt', 'S']} label="Search" />
-                              <ShortcutItem keys={['Alt', 'P']} label="Settings" />
-                              <ShortcutItem keys={['Alt', '.']} label="Toggle Sidebar" />
-                              <ShortcutItem keys={['Alt', 'Left']} label="Back History" />
-                              <ShortcutItem keys={['Alt', 'Right']} label="Forward History" />
+                              <ShortcutItem keys={isMac ? ['Cmd', 'N'] : ['Alt', 'N']} label="New Chat" />
+                              <ShortcutItem keys={isMac ? ['Cmd', 'S'] : ['Alt', 'S']} label="Search" />
+                              <ShortcutItem keys={isMac ? ['Cmd', 'P'] : ['Alt', 'P']} label="Settings" />
+                              <ShortcutItem keys={isMac ? ['Cmd', ','] : ['Alt', ',']} label="Toggle Sidebar" />
+                              <ShortcutItem keys={isMac ? ['Cmd', 'Left'] : ['Alt', 'Left']} label="Back History" />
+                              <ShortcutItem keys={isMac ? ['Cmd', 'Right'] : ['Alt', 'Right']} label="Forward History" />
                               <ShortcutItem keys={['Shift', 'Tab']} label="Toggle Mode" />
                               <ShortcutItem keys={['ArrowUp']} label="Edit Last Message" />
                           </div>

@@ -61,6 +61,8 @@ interface ChatInterfaceProps {
   onDeleteSession: () => void;
   onRenameSession: (newTitle: string) => void;
   onUpdateMode: (mode: SessionMode) => void;
+  onUpdateSearch: (useSearch: boolean) => void;
+  onUpdateSearchProvider: (provider: 'scira' | 'exa' | 'tavily') => void;
   onUpdateCouncilModels?: (models: string[]) => void;
   onChangeView: (view: 'chat' | 'agents' | 'settings') => void;
   visibleModels: string[];
@@ -330,7 +332,7 @@ const MessageHistoryMemo = memo(({
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
     session, messages, onSendMessage, onStopGeneration, isLoading, onUpdateStatus,
     availableLabels, onUpdateLabels, onCreateLabel, onDeleteSession, onRenameSession,
-    onUpdateMode, onUpdateCouncilModels, onChangeView, onNewSession, visibleModels, agents, currentModel, onSelectModel,
+    onUpdateMode, onUpdateSearch, onUpdateSearchProvider, onUpdateCouncilModels, onChangeView, onNewSession, visibleModels, agents, currentModel, onSelectModel,
     sendKey, onRegenerateTitle, onToggleFlag, hasOpenRouterKey, hasRoutewayKey, hasSciraKey, hasExaKey, hasTavilyKey,
     onBackToList, onOpenSidebar, hasAnyKey, userSettings, draftValue, onDraftChange,
     isEditingTitle = false, setIsEditingTitle = (_val: boolean) => {}
@@ -425,7 +427,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   <div onClick={handleTitleClick} onContextMenu={(e) => { e.preventDefault(); setChatContextMenu({ x: e.clientX, y: e.clientY }); }} onDoubleClick={handleDoubleclickTitle} className="flex items-center gap-2 text-[var(--text-main)] font-semibold text-sm cursor-pointer hover:bg-[var(--bg-elevated)] px-2.5 py-1.5 rounded-lg transition-all max-w-full select-none active:scale-[0.98]">
                     {activeAgent && (activeAgent.icon ? <img src={activeAgent.icon} className="w-5 h-5 rounded-full object-cover border border-[var(--border)]" alt="" /> : <Bot className="w-5 h-5 text-[var(--text-muted)]" />)}
                     <span className="truncate lowercase max-w-[140px] md:max-w-[400px]">{session.title}</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-[var(--text-dim)]" />
+                    <ChevronDown className="w-3 h-3.5 text-[var(--text-dim)]" />
                   </div>
               )}
               {titleMenuPosition && (
@@ -517,6 +519,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   hasAnyKey={hasAnyKey}
                   currentMode={session.mode || 'explore'}
                   onUpdateMode={onUpdateMode}
+                  useSearch={session.useSearch || false}
+                  onUpdateSearch={onUpdateSearch}
+                  searchProvider={session.searchProvider || 'scira'}
+                  onUpdateSearchProvider={onUpdateSearchProvider}
                   onUpArrow={handleUpArrowOnInput}
                   externalValue={editContent}
                   councilModels={session.councilModels}

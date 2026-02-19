@@ -50,6 +50,10 @@ interface InputAreaProps {
   hasTavilyKey?: boolean;
   currentMode: SessionMode;
   onUpdateMode: (mode: SessionMode) => void;
+  useSearch: boolean;
+  onUpdateSearch: (useSearch: boolean) => void;
+  searchProvider: 'scira' | 'exa' | 'tavily';
+  onUpdateSearchProvider: (provider: 'scira' | 'exa' | 'tavily') => void;
   onUpdateCouncilModels?: (models: string[]) => void;
   hasAnyKey?: boolean;
   onUpArrow?: () => void;
@@ -83,6 +87,10 @@ export const InputArea: React.FC<InputAreaProps> = ({
     hasTavilyKey,
     currentMode,
     onUpdateMode,
+    useSearch,
+    onUpdateSearch,
+    searchProvider,
+    onUpdateSearchProvider,
     onUpdateCouncilModels,
     hasAnyKey = true,
     onUpArrow,
@@ -96,22 +104,20 @@ export const InputArea: React.FC<InputAreaProps> = ({
 }) => {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [localText, setLocalText] = useState(draftValue);
-  const [useSearch, setUseSearch] = useState(false);
-  const [searchProvider, setSearchProvider] = useState<'scira' | 'exa' | 'tavily'>('scira');
   
   // Auto-select valid provider if current one is missing key
   useEffect(() => {
       if (searchProvider === 'scira' && !hasSciraKey) {
-          if (hasExaKey) setSearchProvider('exa');
-          else if (hasTavilyKey) setSearchProvider('tavily');
+          if (hasExaKey) onUpdateSearchProvider('exa');
+          else if (hasTavilyKey) onUpdateSearchProvider('tavily');
       } else if (searchProvider === 'exa' && !hasExaKey) {
-          if (hasSciraKey) setSearchProvider('scira');
-          else if (hasTavilyKey) setSearchProvider('tavily');
+          if (hasSciraKey) onUpdateSearchProvider('scira');
+          else if (hasTavilyKey) onUpdateSearchProvider('tavily');
       } else if (searchProvider === 'tavily' && !hasTavilyKey) {
-          if (hasSciraKey) setSearchProvider('scira');
-          else if (hasExaKey) setSearchProvider('exa');
+          if (hasSciraKey) onUpdateSearchProvider('scira');
+          else if (hasExaKey) onUpdateSearchProvider('exa');
       }
-  }, [hasSciraKey, hasExaKey, hasTavilyKey, searchProvider]);
+  }, [hasSciraKey, hasExaKey, hasTavilyKey, searchProvider, onUpdateSearchProvider]);
 
   const lastSyncedDraft = useRef(draftValue);
   const localTextRef = useRef(localText);
@@ -454,7 +460,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
               {/* Search Toggle with Provider Menu */}
               <div id="tour-web-search" className="relative flex items-center gap-1">
                   <button 
-                    onClick={() => hasSearchKey && setUseSearch(!useSearch)}
+                    onClick={() => hasSearchKey && onUpdateSearch(!useSearch)}
                     disabled={!hasSearchKey}
                     className={`transition-all duration-300 flex items-center gap-1.5 ${useSearch ? 'text-[var(--accent)]' : 'text-[var(--text-dim)] hover:text-[var(--text-main)]'} ${!hasSearchKey ? 'opacity-30 cursor-not-allowed' : ''}`}
                     title={hasSearchKey ? `Toggle Search (${searchProvider === 'scira' ? 'Scira' : (searchProvider === 'exa' ? 'Exa' : 'Tavily')})` : "Search key required (Settings)"}
@@ -477,19 +483,19 @@ export const InputArea: React.FC<InputAreaProps> = ({
                           <div className="fixed inset-0 z-40" onClick={() => setIsSearchMenuOpen(false)} />
                           <div className="absolute bottom-full left-0 mb-2 w-32 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-xl py-1 z-50 animate-in zoom-in-95 origin-bottom-left">
                               {hasSciraKey && (
-                                <div onClick={() => { setSearchProvider('scira'); setIsSearchMenuOpen(false); }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${searchProvider === 'scira' ? 'bg-[var(--bg-elevated)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}>
+                                <div onClick={() => { onUpdateSearchProvider('scira'); setIsSearchMenuOpen(false); }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${searchProvider === 'scira' ? 'bg-[var(--bg-elevated)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}>
                                     <Globe className="w-3.5 h-3.5" />
                                     <span className="text-[11px] font-bold">Scira</span>
                                 </div>
                               )}
                               {hasExaKey && (
-                                <div onClick={() => { setSearchProvider('exa'); setIsSearchMenuOpen(false); }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${searchProvider === 'exa' ? 'bg-[var(--bg-elevated)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}>
+                                <div onClick={() => { onUpdateSearchProvider('exa'); setIsSearchMenuOpen(false); }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${searchProvider === 'exa' ? 'bg-[var(--bg-elevated)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}>
                                     <Globe className="w-3.5 h-3.5" />
                                     <span className="text-[11px] font-bold">Exa</span>
                                 </div>
                               )}
                               {hasTavilyKey && (
-                                <div onClick={() => { setSearchProvider('tavily'); setIsSearchMenuOpen(false); }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${searchProvider === 'tavily' ? 'bg-[var(--bg-elevated)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}>
+                                <div onClick={() => { onUpdateSearchProvider('tavily'); setIsSearchMenuOpen(false); }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${searchProvider === 'tavily' ? 'bg-[var(--bg-elevated)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]'}`}>
                                     <Globe className="w-3.5 h-3.5" />
                                     <span className="text-[11px] font-bold">Tavily</span>
                                 </div>
