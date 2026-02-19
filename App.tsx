@@ -67,13 +67,17 @@ STRICT CONVERSATION RULES:
 2. NO META-TALK. Don't explain your thoughts in brackets.
 3. BE DIRECT. Get straight to the point.
 4. BE PERSONAL. Use the user's name (${userName}) naturally.
-5. MATH FORMATTING: MANDATORY. Always use LaTeX for ALL mathematical expressions, formulas, and equations. 
-   - Use double dollar signs $$...$$ for block math.
-   - Use single dollar signs $...$ for inline math. 
-   - ALL LaTeX commands (e.g., \\times, \\sqrt, \\frac, \\boxed) MUST be enclosed within these delimiters.
-   - NEVER output raw text math symbols like √, ^ (for powers), or plain text fractions (like 3/4) outside of math blocks.
-   - Correct: $\\sqrt{10}$ or $2 \\times 5$. 
-   - Incorrect: \\sqrt{10} or 2 x 5 or √10.
+
+5. MATH FORMATTING (CRITICAL):
+   - USE LATEX FOR EVERYTHING: ALL mathematical expressions, formulas, coordinates, and variables.
+   - DELIMITERS: 
+     * INLINE: Use SINGLE dollar signs ONLY: $...$
+     * BLOCK: Use DOUBLE dollar signs ONLY on new lines: $$...$$
+   - FORBIDDEN: NEVER use square brackets \\[ ... \\] or parentheses \\( ... \\). They will not render.
+   - COORDINATES: Always wrap them: $P(x, y)$, $O(-1, 3)$.
+   - FRACTIONS/ROOTS: Use LaTeX commands inside dollar signs: $\\frac{a}{b}$, $\\sqrt{x}$.
+   - Ensure NO SPACES between the dollar signs and content (e.g., $x+y$ is correct, $ x+y $ is incorrect).
+
 6. FORMATTING. ${mode === 'explore' ? 'Answer directly without a formal plan.' : 'Start your response with a quick list of what you are going to do using hyphens (-).'}
 
 ${mode === 'execute' ? `
@@ -306,7 +310,9 @@ export const App: React.FC = () => {
       hasNewResponse: false,
       isFlagged: false,
       mode: 'explore',
-      councilModels: GEMINI_MODELS.slice(0, 3)
+      councilModels: GEMINI_MODELS.slice(0, 3),
+      useSearch: false,
+      searchProvider: 'scira'
   });
 
   const applyHistoryState = useCallback((state: NavigationState) => {
@@ -355,19 +361,23 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.altKey && e.key === '.') {
+      
+      const isMod = e.altKey || e.metaKey; // Support both Alt (Option on Mac) and Meta (Command on Mac)
+
+      // Sidebar Toggle: Alt + , OR Command + ,
+      if (isMod && (e.key === ',' || e.code === 'Comma')) {
         e.preventDefault();
         const shouldBeVisible = !isSidebarVisible || !isSubSidebarVisible;
         setIsSidebarVisible(shouldBeVisible);
         setIsSubSidebarVisible(shouldBeVisible);
         return;
       }
-      if (e.altKey) {
+
+      if (isMod) {
         switch (e.key.toLowerCase()) {
           case 'n': e.preventDefault(); handleNewSession(); break;
           case 'p': e.preventDefault(); navigateTo('settings'); break;
           case 's': e.preventDefault(); navigateTo('chat'); setIsMobileSessionListOpen(true); setTriggerSearch(prev => prev + 1); break;
-          case 'b': e.preventDefault(); setIsSidebarVisible(prev => !prev); break;
           case 'arrowleft': e.preventDefault(); handleBack(); break;
           case 'arrowright': e.preventDefault(); handleForward(); break;
         }
@@ -678,6 +688,8 @@ export const App: React.FC = () => {
   const updateSessionLabels = (id: string, lid: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => { if (s.id !== id) return s; const hasLabel = s.labelIds.includes(lid); return { ...s, labelIds: hasLabel ? s.labelIds.filter(x => x !== lid) : [...s.labelIds, lid] }; }) : prev);
   const toggleSessionFlag = (id: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, isFlagged: !s.isFlagged } : s) : prev);
   const updateCouncilModels = (id: string, models: string[]) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, councilModels: models } : s) : prev);
+  const updateSessionSearch = (id: string, useSearch: boolean) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, useSearch } : s) : prev);
+  const updateSessionSearchProvider = (id: string, searchProvider: 'scira' | 'exa' | 'tavily') => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, searchProvider } : s) : prev);
   const handleMarkUnread = (id: string) => setSessions(prev => Array.isArray(prev) ? prev.map(s => s.id === id ? { ...s, hasNewResponse: true } : s) : prev);
 
   const deleteSession = (id: string) => {
@@ -782,7 +794,7 @@ export const App: React.FC = () => {
                     </div>
                     <div className={`flex-1 transition-all duration-300 h-full ${!isMobileSessionListOpen || !activeSessionId ? 'block' : 'hidden md:block'} rounded-none md:rounded-2xl overflow-hidden island-card h-full`}>
                         {activeSession ? (
-                            <ChatInterface key={activeSession.id} session={activeSession} messages={activeMessages} onSendMessage={handleSendMessage} onStopGeneration={() => handleStopGeneration(activeSessionId!)} isLoading={activeLoading} onUpdateStatus={(status) => updateSessionStatus(activeSessionId!, status)} onUpdateMode={(mode) => updateSessionMode(activeSessionId!, mode)} availableLabels={availableLabels} onUpdateLabels={(labelId) => updateSessionLabels(activeSessionId!, labelId)} onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])} onDeleteSession={() => deleteSession(activeSessionId!)} onRenameSession={(title) => renameSession(activeSessionId!, title)} onRegenerateTitle={handleRegenerateTitle} onToggleFlag={() => toggleSessionFlag(activeSessionId!)} onChangeView={(v) => navigateTo(v)} onNewSession={handleNewSession} visibleModels={settings.visibleModels} agents={agents} currentModel={activeSessionId ? (sessionModels[activeSessionId] || '') : ''} onSelectModel={(m) => { if(activeSessionId) setSessionModels(prev => ({...prev, [activeSessionId]: m})); }} onUpdateCouncilModels={(models) => updateCouncilModels(activeSessionId!, models)} sendKey={settings.sendKey} hasOpenRouterKey={!!(settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt)} hasRoutewayKey={!!settings.apiKeys.routeway} hasSciraKey={!!settings.apiKeys.scira} hasExaKey={!!settings.apiKeys.exa} hasTavilyKey={!!settings.apiKeys.tavily} onBackToList={() => setIsMobileSessionListOpen(true)} onOpenSidebar={() => setIsMobileSidebarOpen(true)} hasAnyKey={hasAnyKey} userSettings={settings} draftValue={activeSessionId ? (sessionDrafts[activeSessionId] || '') : ''} onDraftChange={(val) => { if(activeSessionId) setSessionDrafts(prev => ({...prev, [activeSessionId]: val})); }} isEditingTitle={isEditingTitle} setIsEditingTitle={setIsEditingTitle} />
+                            <ChatInterface key={activeSession.id} session={activeSession} messages={activeMessages} onSendMessage={handleSendMessage} onStopGeneration={() => handleStopGeneration(activeSessionId!)} isLoading={activeLoading} onUpdateStatus={(status) => updateSessionStatus(activeSessionId!, status)} onUpdateMode={(mode) => updateSessionMode(activeSessionId!, mode)} onUpdateSearch={(useSearch) => updateSessionSearch(activeSessionId!, useSearch)} onUpdateSearchProvider={(provider) => updateSessionSearchProvider(activeSessionId!, provider)} availableLabels={availableLabels} onUpdateLabels={(labelId) => updateSessionLabels(activeSessionId!, labelId)} onCreateLabel={(l) => setAvailableLabels(prev => [...prev, l])} onDeleteSession={() => deleteSession(activeSessionId!)} onRenameSession={(title) => renameSession(activeSessionId!, title)} onRegenerateTitle={handleRegenerateTitle} onToggleFlag={() => toggleSessionFlag(activeSessionId!)} onChangeView={(v) => navigateTo(v)} onNewSession={handleNewSession} visibleModels={settings.visibleModels} agents={agents} currentModel={activeSessionId ? (sessionModels[activeSessionId] || '') : ''} onSelectModel={(m) => { if(activeSessionId) setSessionModels(prev => ({...prev, [activeSessionId]: m})); }} onUpdateCouncilModels={(models) => updateCouncilModels(activeSessionId!, models)} sendKey={settings.sendKey} hasOpenRouterKey={!!(settings.apiKeys.openRouter || settings.apiKeys.openRouterAlt)} hasRoutewayKey={!!settings.apiKeys.routeway} hasSciraKey={!!settings.apiKeys.scira} hasExaKey={!!settings.apiKeys.exa} hasTavilyKey={!!settings.apiKeys.tavily} onBackToList={() => setIsMobileSessionListOpen(true)} onOpenSidebar={() => setIsMobileSidebarOpen(true)} hasAnyKey={hasAnyKey} userSettings={settings} draftValue={activeSessionId ? (sessionDrafts[activeSessionId] || '') : ''} onDraftChange={(val) => { if(activeSessionId) setSessionDrafts(prev => ({...prev, [activeSessionId]: val})); }} isEditingTitle={isEditingTitle} setIsEditingTitle={setIsEditingTitle} />
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-[var(--text-dim)] bg-[var(--bg-tertiary)] flex-col gap-2 h-full">
                                 <div className="md:hidden absolute top-4 left-4"><button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 bg-[var(--bg-elevated)] rounded-lg text-[var(--text-main)]"><Menu className="w-5 h-5" /></button></div>

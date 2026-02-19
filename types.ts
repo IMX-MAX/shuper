@@ -50,6 +50,8 @@ export interface Session {
   isFlagged?: boolean;
   mode?: SessionMode;
   councilModels?: string[];
+  useSearch?: boolean;
+  searchProvider?: 'scira' | 'exa' | 'tavily';
 }
 
 export interface AgentTool {
