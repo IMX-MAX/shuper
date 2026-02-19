@@ -33,7 +33,8 @@ import {
   Tag, 
   Users, 
   FileText,
-  X 
+  X,
+  FileCode
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -97,7 +98,6 @@ const WaveLoader = () => (
 const ThinkingBlock = ({ steps, thoughtProcess, isGenerating, defaultExpanded }: { steps: string[], thoughtProcess?: string, isGenerating?: boolean, defaultExpanded?: boolean }) => {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded || false);
 
-    // Update expanded state if defaultExpanded prop changes significantly (e.g. from false to true when processing finishes)
     useEffect(() => {
         if (defaultExpanded) setIsExpanded(true);
     }, [defaultExpanded]);
@@ -186,20 +186,8 @@ const MemoizedMessage = memo(({ msg, index, isGenerating, sessionMode, onCopyTex
 
     const { planSteps, mainContent } = processModelOutput(msg.content, sessionMode);
     
-    // Determine if ThinkingBlock should be displayed
     const showThinkingBlock = sessionMode === 'execute' || !!msg.thoughtProcess;
-
-    // Determine if we should show the initial loader.
-    // Show only if:
-    // 1. We are generating
-    // 2. We have no content to show yet
-    // 3. We are NOT showing the ThinkingBlock (which has its own loader)
     const showInitialLoader = isGenerating && !mainContent && !showThinkingBlock;
-    
-    // Automatically expand thinking if:
-    // 1. It is NOT generating anymore
-    // 2. We have a thought process
-    // 3. We DO NOT have main content (e.g. search only response)
     const shouldExpandThinking = !isGenerating && !!msg.thoughtProcess && !mainContent;
 
     return (
@@ -225,7 +213,7 @@ const MemoizedMessage = memo(({ msg, index, isGenerating, sessionMode, onCopyTex
                     <div className="bg-[#E5E5E5]/10 text-[var(--text-main)] p-3 px-5 rounded-2xl text-[15px] font-medium shadow-sm border border-transparent leading-relaxed cursor-default">{msg.content}</div>
                 </div>
             ) : (
-                <div className="w-full text-[var(--text-main)] leading-relaxed text-[15px] flex flex-col gap-1 group/msg">
+                <div className="w-full text-[var(--text-main)] leading-relaxed text-[15px] flex flex-col gap-1 group/msg" onContextMenu={(e) => onMessageContextMenu(e, msg.id)}>
                     {showInitialLoader && (
                         <div className="flex items-center gap-4 text-[var(--text-main)] text-xs md:text-sm animate-pulse ml-1 mb-8 py-2">
                             <WaveLoader />
@@ -243,8 +231,9 @@ const MemoizedMessage = memo(({ msg, index, isGenerating, sessionMode, onCopyTex
                         />
                     )}
                     {mainContent && (
-                        <div className="markdown-body transition-opacity duration-300 overflow-x-auto font-medium">
+                        <div className="transition-opacity duration-300 font-medium max-w-full">
                             <Markdown 
+                              className="markdown-body"
                               remarkPlugins={[remarkGfm, remarkMath]} 
                               rehypePlugins={[rehypeKatex]}
                               components={{
@@ -347,6 +336,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState<string>('');
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
+  const [markdownViewMsgId, setMarkdownViewMsgId] = useState<string | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -460,10 +450,31 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <>
                 <div className="fixed inset-0 z-[110]" onClick={() => setMessageContextMenu(null)} />
                 <div className="fixed z-[120] w-44 bg-[#1F1F1F] border border-[#333] rounded-xl shadow-2xl py-1.5 text-[13px] animate-in fade-in zoom-in-95 duration-100 origin-top-left" style={{ top: messageContextMenu.y, left: messageContextMenu.x }}>
-                    <div onClick={() => handleEditMessageAction(messageContextMenu.messageId)} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] text-[#A1A1A1] hover:text-white cursor-pointer rounded-lg mx-1"><Edit2 className="w-3.5 h-3.5" /><span>Edit</span></div>
+                    {messages.find(m => m.id === messageContextMenu.messageId)?.role === 'user' && (
+                        <div onClick={() => handleEditMessageAction(messageContextMenu.messageId)} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] text-[#A1A1A1] hover:text-white cursor-pointer rounded-lg mx-1"><Edit2 className="w-3.5 h-3.5" /><span>Edit</span></div>
+                    )}
+                    <div onClick={() => { setMarkdownViewMsgId(messageContextMenu.messageId); setMessageContextMenu(null); }} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] text-[#A1A1A1] hover:text-white cursor-pointer rounded-lg mx-1"><FileCode className="w-3.5 h-3.5" /><span>View Markdown</span></div>
                     <div onClick={() => { handleCopyText(messages.find(m => m.id === messageContextMenu.messageId)?.content || '', messageContextMenu.messageId); setMessageContextMenu(null); }} className="flex items-center gap-3 px-3 py-2 hover:bg-[#2A2A2A] text-[#A1A1A1] hover:text-white cursor-pointer rounded-lg mx-1"><Copy className="w-3.5 h-3.5" /><span>Copy</span></div>
                 </div>
             </>
+        )}
+
+        {markdownViewMsgId && (
+            <div className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setMarkdownViewMsgId(null)}>
+                <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl w-full max-w-2xl max-h-[70vh] flex flex-col shadow-2xl animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+                        <span className="font-bold text-[var(--text-main)] text-sm">Raw Markdown</span>
+                        <button onClick={() => setMarkdownViewMsgId(null)} className="p-1 hover:bg-[var(--bg-elevated)] rounded-lg text-[var(--text-dim)] hover:text-[var(--text-main)]">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-5 bg-[var(--bg-tertiary)] rounded-b-2xl">
+                        <pre className="text-xs text-[var(--text-muted)] whitespace-pre-wrap font-mono leading-relaxed selection:bg-[var(--accent)] selection:text-[var(--bg-primary)]">
+                            {messages.find(m => m.id === markdownViewMsgId)?.content}
+                        </pre>
+                    </div>
+                </div>
+            </div>
         )}
 
         {viewingAttachment && (

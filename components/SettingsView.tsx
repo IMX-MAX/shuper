@@ -722,7 +722,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               <ShortcutItem keys={isMac ? ['Cmd', 'N'] : ['Alt', 'N']} label="New Chat" />
                               <ShortcutItem keys={isMac ? ['Cmd', 'S'] : ['Alt', 'S']} label="Search" />
                               <ShortcutItem keys={isMac ? ['Cmd', 'P'] : ['Alt', 'P']} label="Settings" />
-                              <ShortcutItem keys={isMac ? ['Cmd', ','] : ['Alt', ',']} label="Toggle Sidebar" />
+                              <ShortcutItem keys={isMac ? ['Cmd', '.'] : ['Alt', '.']} label="Toggle Sidebar" />
                               <ShortcutItem keys={isMac ? ['Cmd', 'Left'] : ['Alt', 'Left']} label="Back History" />
                               <ShortcutItem keys={isMac ? ['Cmd', 'Right'] : ['Alt', 'Right']} label="Forward History" />
                               <ShortcutItem keys={['Shift', 'Tab']} label="Toggle Mode" />
